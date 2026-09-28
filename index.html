@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vạn Giới Ký</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Noto+Serif+Display:wght@500;600;700&family=Noto+Serif:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      .origin-screen { overflow: hidden; }
+      body.origin-active { height: 100vh; overflow: hidden; }
+      .realm-builder { margin-top: 14px; padding: 14px; border: 1px solid #c8b996; background: rgba(231,218,184,.24); }
+      .realm-builder, .realm-builder > label { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+      .realm-builder > label > input { width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box; }
+      .realm-definition { margin-top: 13px; font-size: 10px; color: #6e6655; }
+      .realm-adder { display: flex; gap: 8px; margin-top: 6px; }
+      .realm-adder input { min-width: 0; flex: 1; }
+      .realm-adder button { border: 1px solid #80622c; background: #f5edda; color: #71531e; padding: 0 15px; font: 11px "Noto Serif", serif; cursor: pointer; }
+      .realm-tags { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+      .realm-tags p { width: 100%; margin: 1px 0; color: #807663; font-size: 10px; font-style: italic; }
+      .realm-hint { display: block; margin-top: 5px; color: #857657; font-size: 10px; font-style: italic; }
+      .realm-tag { display: inline-flex; align-items: center; gap: 7px; padding: 5px 7px 5px 9px; border: 1px solid #aa9060; background: #f8f0dc; color: #4a4232; font-size: 11px; }
+      .realm-tag button { border: 0; background: transparent; color: #9a4e3b; font: 16px/10px Arial; cursor: pointer; padding: 0; }
+      @media (min-width: 721px) {
+        .origin-card { padding: 24px 38px; }
+        .origin-card h1 { font-size: 29px; }
+        .origin-intro { margin: 4px 0 15px; }
+        .realm-builder { margin-top: 10px; padding: 10px 14px; }
+        .realm-definition { margin-top: 8px; }
+        .realm-adder { margin-top: 4px; }
+        .realm-tags { max-height: 52px; overflow-y: auto; margin-top: 7px; padding-right: 3px; }
+        .origin-wide { margin-top: 9px; }
+        .origin-card textarea { min-height: 56px; }
+        .begin-game { margin-top: 14px; }
+      }
+      @media (max-width: 720px), (max-height: 760px) {
+        .origin-screen { display: block; overflow-y: auto; }
+        .origin-card { margin: auto; }
+        body.origin-active { overflow: auto; }
+        .realm-adder { align-items: stretch; }
+      }
+    </style>
+    <style>
+      .origin-screen{position:fixed;z-index:10;inset:0;display:grid;place-items:center;padding:24px;overflow:hidden;background:radial-gradient(circle at 70% 20%,rgba(166,135,72,.25),transparent 31%),linear-gradient(135deg,#22271f,#4c5743 55%,#25271f);transition:opacity .45s,visibility .45s}
+      .origin-screen:before{content:"";position:fixed;inset:16px;border:1px solid rgba(230,210,161,.45);pointer-events:none}
+      .origin-screen.done{opacity:0;visibility:hidden;pointer-events:none}
+      .origin-card{width:min(760px,100%);max-height:calc(100vh - 48px);overflow-y:auto;background:rgba(248,241,221,.97);border:1px solid #423b2b;box-shadow:8px 9px 0 rgba(13,17,12,.35);padding:24px 38px;position:relative}
+      .origin-seal{position:absolute;right:34px;top:26px;width:49px;height:49px;border:1px solid #a27b3c;border-radius:50%;display:grid;place-items:center;color:#a27b3c;font:25px "Noto Serif Display",serif}
+      .origin-kicker{font-size:10px;color:#9a7538;letter-spacing:2.4px;font-weight:bold;margin:0 0 5px}.origin-card h1{font:700 29px "Noto Serif Display",serif;margin:0}.origin-intro{max-width:560px;margin:4px 0 15px;line-height:1.8;color:#756c59;font-size:12px}
+      .origin-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.origin-card label{display:block;color:#6e6655;font-size:10px;letter-spacing:.3px;min-width:0}.origin-card input,.origin-card select,.origin-card textarea{display:block;width:100%;min-width:0;margin-top:6px;border:1px solid #78705e;background:#faf5e7;padding:10px 11px;font-family:inherit;font-size:12px;color:var(--ink);outline-color:var(--gold);border-radius:0}.origin-card input:focus,.origin-card select:focus,.origin-card textarea:focus{border-color:#a77a38;box-shadow:0 0 0 2px rgba(167,122,56,.12)}.origin-wide{margin-top:9px}.origin-card textarea{min-height:56px;line-height:1.65;resize:vertical}
+      .realm-builder{width:100%;max-width:100%;min-width:0;box-sizing:border-box;margin-top:10px;padding:10px 14px;border:1px solid #c8b996;background:rgba(231,218,184,.24)}.realm-builder>label{width:100%;max-width:100%;min-width:0;box-sizing:border-box}.realm-builder>label>input{width:100%;max-width:100%;min-width:0;box-sizing:border-box}.realm-definition{margin-top:8px;font-size:10px;color:#6e6655}.realm-adder{display:flex;gap:8px;margin-top:4px}.realm-adder input{min-width:0;flex:1}.realm-adder button{border:1px solid #80622c;background:#f5edda;color:#71531e;padding:0 15px;font:11px "Noto Serif",serif;cursor:pointer}.realm-hint{display:block;margin-top:5px;color:#857657;font-size:10px;font-style:italic}.realm-tags{display:flex;flex-wrap:wrap;gap:7px;max-height:52px;overflow-y:auto;margin-top:7px;padding-right:3px}.realm-tags p{width:100%;margin:1px 0;color:#807663;font-size:10px;font-style:italic}.realm-tag{display:inline-flex;align-items:center;gap:7px;padding:5px 7px 5px 9px;border:1px solid #aa9060;background:#f8f0dc;color:#4a4232;font-size:11px}.realm-tag button{border:0;background:transparent;color:#9a4e3b;font:16px/10px Arial;cursor:pointer;padding:0}.begin-game{display:block;margin:14px 0 0 auto;border:1px solid #363226;background:#35382d;color:#fbf1d8;padding:13px 21px;font:11px "Noto Serif",serif;text-transform:uppercase;letter-spacing:1.4px;cursor:pointer}.begin-game span{font-size:17px;margin-left:12px;color:#e0bc72}body.origin-active{height:100vh;overflow:hidden}
+      @media(max-width:720px){.origin-screen{display:block;overflow-y:auto;padding:14px}.origin-card{max-height:none;margin:auto;padding:27px 21px}.origin-card h1{font-size:26px}.origin-grid{grid-template-columns:1fr}.origin-seal{right:20px;top:18px}.origin-intro{padding-right:40px}body.origin-active{height:auto;min-height:100vh;overflow:auto}}
+      @media(max-height:760px) and (min-width:721px){.origin-card{padding-top:18px;padding-bottom:18px}.origin-card h1{font-size:25px}.origin-intro{margin:3px 0 9px}.realm-builder{margin-top:7px;padding:7px 12px}.realm-definition{margin-top:5px}.origin-wide{margin-top:6px}.origin-card textarea{min-height:46px}.begin-game{margin-top:9px}}
+    </style>
+  </head>
+  <body class="origin-active">
+    <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#"><span class="brand-mark">萬</span><span>Vạn Giới Ký<small>Hành trình của đạo hữu</small></span></a>
+        <div class="chapter"><span>CHƯƠNG 01</span><strong>Khởi đầu tại Thanh Vân</strong></div>
+        <button class="settings-btn" id="open-customize" aria-label="Mở tùy chỉnh">✦ <span>Tùy chỉnh</span></button>
+      </header>
+
+      <section class="layout">
+        <aside class="profile panel">
+          <div class="portrait"><div class="portrait-ring">玄</div><span class="online-dot"></span></div>
+          <h1 id="player-name">Lý Tiềm</h1><p class="title" id="player-realm">Luyện Khí · Tầng 7</p>
+          <div class="xp-block"><div><span>Tu vi</span><b id="xp-label">680 / 1000</b></div><div class="xp-track"><i id="xp-fill" style="width:68%"></i></div></div>
+          <div class="stat-grid">
+            <div><span>⚔ Công kích</span><b id="attack">128</b></div><div><span>◈ Phòng ngự</span><b id="defense">96</b></div>
+            <div><span>✧ Linh lực</span><b id="spirit">240</b></div><div><span>♧ Khí vận</span><b id="luck">35</b></div>
+          </div>
+          <div class="side-section"><div class="side-heading"><span>Trang bị</span><button id="add-equipment">+</button></div><div class="item-list" id="equipment-list"></div></div>
+          <div class="side-section"><div class="side-heading"><span>Kỹ năng</span><button id="add-skill">+</button></div><div class="item-list" id="skills-list"></div></div>
+        </aside>
+
+        <section class="story-column">
+          <nav class="action-tabs" id="action-tabs">
+            <button class="active">Hành động 1 <em>01</em></button><button>Hành động 2 <em>02</em></button><button>Hành động 3 <em>03</em></button><button>Hành động 4 <em>04</em></button>
+          </nav>
+          <article class="story panel" id="story">
+            <div class="chapter-label"><span></span> Thanh Vân Tông · Ngoại môn <span></span></div>
+            <p class="narration lead">Mưa xuân lất phất phủ lên những mái ngói xanh rêu của Thanh Vân Tông. Trước mặt ngươi, con đường lát đá dẫn thẳng lên Vấn Đạo Đài, nơi cơ duyên và thử thách vẫn đang lặng lẽ chờ đợi.</p>
+            <div class="story-entry npc"><div class="avatar">T</div><div><div class="speaker">TRƯỞNG LÃO TỪ <small>ngoại môn chấp sự</small></div><dialogue>Hôm nay là ngày khảo hạch. Lý Tiềm, ngươi đã chuẩn bị xong chưa?</dialogue></div></div>
+            <p class="narration">Gió núi lướt qua vạt áo, mang theo hương tùng thanh mát. Nơi xa, tiếng chuông cổ từ chính điện ngân vang ba hồi, khiến lòng người không khỏi dâng lên một chút mong chờ.</p>
+          </article>
+
+          <section class="composer panel">
+            <div class="composer-top"><button class="add-action active" data-type="narration"><b>＋</b> Tường thuật</button><button class="add-action" data-type="dialogue"><b>＋</b> Đối thoại</button></div>
+            <div class="inputs" id="inputs"></div>
+            <div class="composer-footer"><label class="event-check"><input type="checkbox" /> Chèn sự kiện / tình tiết bất ngờ</label><button class="execute" id="execute">Thực hiện <span>↵</span></button></div>
+          </section>
+        </section>
+
+        <aside class="rightbar">
+          <section class="panel realm-card"><div class="card-kicker">CẢNH GIỚI</div><h2>Đạo đồ tu hành</h2><ol id="realm-list"></ol></section>
+          <section class="panel quest-card"><div class="card-kicker">MỤC TIÊU HIỆN TẠI</div><h3>Khảo hạch ngoại môn</h3><p>Đến Vấn Đạo Đài trước khi tiếng chuông thứ tư vang lên.</p><div class="quest-progress"><i></i></div><small>Tiến độ hành trình <b>25%</b></small></section>
+          <section class="panel notes-card"><div class="card-kicker">KÝ ỨC GẦN ĐÂY</div><p>• Được trưởng lão Từ gọi đến.</p><p>• Nhận nhiệm vụ khảo hạch.</p></section>
+        </aside>
+      </section>
+    </main>
+
+    <div class="origin-screen" id="origin-screen"><section class="origin-card"><div class="origin-seal">萬</div><p class="origin-kicker">VẠN GIỚI KÝ · KHAI MỞ HÀNH TRÌNH</p><h1>Viết nên xuất thân của ngươi</h1><p class="origin-intro">Trước khi bước vào thế giới tu hành, hãy dựng nên nhân vật và bối cảnh mà ngươi muốn trải nghiệm.</p><form id="origin-form"><div class="origin-grid"><label>Họ và tên<input id="origin-name" required maxlength="30" placeholder="Ví dụ: Lý Tiềm" /></label><label>Tuổi<input id="origin-age" required type="number" min="1" max="999" placeholder="Ví dụ: 18" /></label></div><section class="realm-builder"><label>Cảnh giới hiện tại<input id="origin-realm" required maxlength="60" placeholder="Ví dụ: Khai Mạch" /></label><div class="realm-definition"><span>Hệ thống cảnh giới của thế giới</span><div class="realm-adder"><input id="new-realm" maxlength="60" placeholder="Ví dụ: Khai Mạch, Tinh Hải..." /><button type="button" id="add-realm">Thêm</button></div><div class="realm-tags" id="origin-realms"><p>Chưa có cảnh giới nào. Hãy tự tạo hệ thống tu hành của thế giới này.</p></div></div></section><label class="origin-wide">Thân phận<textarea id="origin-identity" required maxlength="180" placeholder="Ví dụ: Người thừa kế của một gia tộc sa sút, đệ tử ngoại môn..."></textarea></label><label class="origin-wide">Bối cảnh trò chơi<textarea id="origin-setting" required maxlength="500" placeholder="Ví dụ: Một thế giới có tu sĩ, tông môn, bí cảnh và các cuộc tranh đấu vì cơ duyên..."></textarea></label><label class="origin-wide">Mục tiêu ban đầu<textarea id="origin-goal" maxlength="280" placeholder="Ví dụ: Tìm lại di vật của gia tộc và bước lên đỉnh cao tu hành."></textarea></label><button class="begin-game" type="submit">Bắt đầu hành trình <span>→</span></button></form></section></div>
+    <div class="modal-backdrop" id="modal"><section class="custom-modal panel"><button class="close" id="close-modal">×</button><div class="modal-kicker">TÙY CHỈNH THIÊN CƠ</div><h2>Thay đổi vận mệnh</h2><p class="modal-intro">Những chỉnh sửa này được áp dụng ngay vào hành trình hiện tại.</p><div class="form-row"><label>Tên nhân vật<input id="custom-name" value="Lý Tiềm" /></label><label>Cấp độ<input id="custom-level" type="number" min="1" max="99" value="7" /></label></div><div class="form-row"><label>Cảnh giới<select id="custom-realm"></select></label><label>Tu vi<input id="custom-xp" type="number" min="0" max="1000" value="680" /></label></div><div class="custom-divider">Tạo vật phẩm</div><div class="form-row item-form"><label>Tên<input id="item-name" placeholder="Ví dụ: Thanh Phong Kiếm" /></label><label>Loại<select id="item-type"><option>Trang bị</option><option>Kỹ năng</option></select></label><label>Phẩm chất<select id="item-rarity"><option>Phàm phẩm</option><option>Hoàng phẩm</option><option>Huyền phẩm</option><option>Địa phẩm</option><option>Thiên phẩm</option><option>Tiên phẩm</option></select></label></div><button class="create-item" id="create-item">Tạo vật phẩm</button><button class="save-custom" id="save-custom">Lưu thay đổi</button></section></div>
+    <template id="narration-input"><section class="input-card narration-card"><button class="remove">×</button><label>Tường thuật</label><textarea placeholder="Miêu tả hành động, diễn biến của nhân vật..."></textarea></section></template>
+    <template id="dialogue-input"><section class="input-card dialogue-card"><button class="remove">×</button><label>Đối thoại</label><div class="dialogue-meta"><button class="self">Nhân vật chính</button><input placeholder="Tìm/gõ tên NPC..." /></div><textarea placeholder="Nội dung lời nói..."></textarea></section></template>
+    <script src="app.js"></script>
+  </body>
+</html>
