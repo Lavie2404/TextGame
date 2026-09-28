@@ -33,6 +33,7 @@ document.querySelector('#origin-form').addEventListener('submit',async event=>{
   try{
     if(typeof window.generateOpeningText!=='function')throw new Error('Không tải được mô-đun AI. Hãy tải lại trang.');
     const opening=await window.generateOpeningText({name,age,identity,level,realm,setting,goal,allowNsfw});
+    window.resetChapterMemory?.();
     renderRealmPanels(realm,level);document.querySelector('#player-name').textContent=name;document.querySelector('#player-realm').textContent=`${realm} · Cấp ${level}`;document.querySelector('#custom-name').value=name;document.querySelector('#custom-level').value=level;document.querySelector('#custom-realm').value=realm;document.querySelector('.chapter strong').textContent=identity;document.querySelector('.quest-card h3').textContent=goal||'Bắt đầu hành trình';
     story.replaceChildren();
     const chapterLabel=document.createElement('div');chapterLabel.className='chapter-label';

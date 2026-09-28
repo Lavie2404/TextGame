@@ -7,6 +7,9 @@
   const turnButton = document.querySelector('#ai-turn');
   const story = document.querySelector('#story');
   const inputs = document.querySelector('#inputs');
+  const CHAPTER_MEMORY_KEY = 'van-gioi-ky.chapter-memory.v1';
+  const TURNS_PER_CHAPTER = 4;
+  const MAX_REMEMBERED_CHAPTERS = 5;
   const statusText = {
     idle: 'Chưa kết nối Ollama',
     busy: 'Đang kết nối…',
@@ -14,6 +17,126 @@
     writing: 'AI đang viết đoạn dài…',
     error: 'Không kết nối được Ollama'
   };
+
+  function freshChapterState() {
+    return { chapterNumber: 1, turns: [], memories: [] };
+  }
+
+  function loadChapterState() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CHAPTER_MEMORY_KEY) || 'null');
+      if (saved && Number.isInteger(saved.chapterNumber) && Array.isArray(saved.turns) && Array.isArray(saved.memories)) {
+        return { ...saved, memories: saved.memories.slice(-MAX_REMEMBERED_CHAPTERS) };
+      }
+    } catch (error) {
+      console.warn('Không đọc được bộ nhớ chương đã lưu.', error);
+    }
+    return freshChapterState();
+  }
+
+  let chapterState = loadChapterState();
+
+  function saveChapterState() {
+    try {
+      localStorage.setItem(CHAPTER_MEMORY_KEY, JSON.stringify(chapterState));
+    } catch (error) {
+      console.warn('Không lưu được bộ nhớ chương.', error);
+    }
+  }
+
+  function updateChapterProgress() {
+    const chapterLabel = document.querySelector('.chapter span');
+    if (chapterLabel) chapterLabel.textContent = `CHƯƠNG ${String(chapterState.chapterNumber).padStart(2, '0')}`;
+    const tabs = [...document.querySelectorAll('#action-tabs button')];
+    const currentTurn = chapterState.turns.length;
+    tabs.forEach((tab, index) => tab.classList.toggle('active', index === currentTurn));
+  }
+
+  window.resetChapterMemory = () => {
+    chapterState = freshChapterState();
+    saveChapterState();
+    updateChapterProgress();
+  };
+
+  function formatChapterMemory() {
+    if (!chapterState.memories.length) return 'Chưa có chương hoàn tất nào trong bộ nhớ.';
+    return chapterState.memories.slice(-MAX_REMEMBERED_CHAPTERS)
+      .map(chapter => `CHƯƠNG ${String(chapter.number).padStart(2, '0')}: ${chapter.summary}`)
+      .join('\n\n');
+  }
+
+  function formatCurrentChapterContext() {
+    if (!chapterState.turns.length) return 'Chưa có lượt nào khác trong chương hiện tại.';
+    return chapterState.turns.map((turn, index) => {
+      const paragraphs = turn.narrative.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean);
+      const highlights = [...paragraphs.slice(0, 1), ...paragraphs.slice(-1)];
+      return `LƯỢT ${index + 1} — HÀNH ĐỘNG: ${turn.action}\nDIỄN BIẾN ĐÃ KỂ: ${[...new Set(highlights)].join(' ').slice(0, 900)}`;
+    }).join('\n\n');
+  }
+
+  function fallbackChapterSummary(turns) {
+    return turns.map((turn, index) => {
+      const paragraphs = turn.narrative.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean);
+      const highlights = [...paragraphs.slice(0, 2), ...paragraphs.slice(-2)];
+      return `Lượt ${index + 1} — Hành động: ${turn.action.slice(0, 280)}. Diễn biến: ${[...new Set(highlights)].join(' ')} `;
+    }).join('\n').slice(0, 3600);
+  }
+
+  function chapterSourceForSummary(turn) {
+    if (turn.narrative.length <= 5000) return turn.narrative;
+    return `${turn.narrative.slice(0, 2500)}\n[Đã lược bớt phần giữa; xem diễn biến cuối lượt bên dưới.]\n${turn.narrative.slice(-2500)}`;
+  }
+
+  async function closeCurrentChapter(model) {
+    const closingChapter = { number: chapterState.chapterNumber, turns: chapterState.turns };
+    const previousMemory = formatChapterMemory();
+    let summary = '';
+    setStatus('writing', 'Đang lưu trí nhớ chương…');
+    help.textContent = `Ollama đang tóm lược chương ${closingChapter.number} để giữ mạch truyện cho các chương sau.`;
+    try {
+      const response = await fetchWithTimeout(`${OLLAMA_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: 'Ngươi là biên tập viên ghi nhớ liên tục cho game truyện. Tóm lược CHỈ những sự kiện đã xảy ra trong tư liệu, không suy diễn, không thêm chi tiết. Ghi ngắn gọn bằng tiếng Việt (200–300 từ), tập trung vào địa điểm và thời điểm hiện tại, hành động/quyết định đã hoàn tất, kết quả và tài nguyên thay đổi, NPC cùng thái độ/quan hệ, thông tin hoặc lời hứa đã tiết lộ, bí ẩn và việc còn dang dở. Phân biệt rõ dữ kiện chắc chắn với điều nhân vật chưa biết. Không viết văn chương, không lặp lại diễn biến.' },
+            { role: 'user', content: `TÓM LƯỢC CÁC CHƯƠNG TRƯỚC ĐỂ ĐỐI CHIẾU:\n${previousMemory}\n\nCHƯƠNG ${closingChapter.number} CẦN GHI NHỚ:\n${closingChapter.turns.map((turn, index) => `LƯỢT ${index + 1}\nHÀNH ĐỘNG NGƯỜI CHƠI: ${turn.action}\nDIỄN BIẾN ĐÃ KỂ: ${chapterSourceForSummary(turn)}`).join('\n\n')}` }
+          ],
+          think: false,
+          stream: false,
+          keep_alive: '10m',
+          options: { temperature: 0.2, top_p: 0.8, repeat_penalty: 1.15, num_predict: 900 }
+        })
+      }, 180000);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
+      summary = data.message?.content?.trim() || '';
+    } catch (error) {
+      console.warn('Dùng bản ghi rút gọn dự phòng cho chương.', error);
+    }
+
+    chapterState.memories.push({ number: closingChapter.number, summary: (summary || fallbackChapterSummary(closingChapter.turns)).slice(0, 4000) });
+    chapterState.memories = chapterState.memories.slice(-MAX_REMEMBERED_CHAPTERS);
+    chapterState.chapterNumber++;
+    chapterState.turns = [];
+    saveChapterState();
+    updateChapterProgress();
+    setStatus('ready');
+    help.textContent = `Đã lưu trí nhớ chương ${closingChapter.number}; AI mang theo tối đa ${MAX_REMEMBERED_CHAPTERS} chương gần nhất.`;
+  }
+
+  async function recordTurn(action, narrative, model) {
+    chapterState.turns.push({ action, narrative });
+    saveChapterState();
+    if (chapterState.turns.length >= TURNS_PER_CHAPTER) {
+      await closeCurrentChapter(model);
+      return true;
+    } else {
+      updateChapterProgress();
+      return false;
+    }
+  }
 
   function setStatus(state, message = statusText[state]) {
     status.dataset.state = state;
@@ -65,7 +188,7 @@
       `CHỈ SỐ HIỆN TẠI: ${stats}.`,
       `TRANG BỊ ĐANG CÓ: ${readItems('#equipment-list').join('; ') || 'chưa ghi nhận'}.`,
       `KỸ NĂNG ĐANG CÓ: ${readItems('#skills-list').join('; ') || 'chưa ghi nhận'}.`,
-      `CHƯƠNG / BỐI CẢNH ĐANG HIỂN THỊ: ${document.querySelector('.chapter strong')?.textContent?.trim() || 'chưa rõ'}.`,
+      `CHƯƠNG ĐANG KỂ: ${document.querySelector('.chapter span')?.textContent?.trim() || 'CHƯƠNG 01'}.`,
       `MỤC TIÊU HIỆN TẠI: ${document.querySelector('.quest-card h3')?.textContent?.trim() || profile.goal || 'chưa rõ'} — ${document.querySelector('.quest-card p')?.textContent?.trim() || ''}`
     ].join('\n');
   }
@@ -159,6 +282,7 @@
     return [
       'Ngươi là người dẫn truyện tương tác cho game tiên hiệp Vạn Giới Ký. Viết hoàn toàn bằng tiếng Việt tự nhiên, giàu hình ảnh và có nhịp kể cuốn hút; dùng từ cổ phong vừa phải, không dịch sát văn phong tiếng Anh.',
       'Tiếp nối nhất quán bối cảnh và sự kiện đã xảy ra. Dùng hồ sơ thế giới, mục tiêu, chỉ số, trang bị, kỹ năng và đoạn truyện gần nhất làm ngữ cảnh bắt buộc; ưu tiên chi tiết đã được xác lập, không tự đổi tuổi, thân phận, địa điểm, quan hệ, quy tắc sức mạnh hoặc trạng thái tài nguyên. Nếu thiếu thông tin, không khẳng định chi tiết mới như sự thật đã có.',
+      'BỘ NHỚ CÁC CHƯƠNG TRƯỚC là dữ kiện liên tục đã được kể. Không tái diễn lại cảnh, hành động, lời thoại hoặc tiết lộ trong đó; chỉ nhắc ngắn nếu cần để nối mạch. Ưu tiên diễn biến mới và giải quyết các việc còn dang dở khi hành động hiện tại dẫn tới.',
       'Mỗi lượt hồi đáp hướng tới khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn tự nhiên; chất lượng và mạch truyện quan trọng hơn việc cố kéo đủ chữ. HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI là dàn ý những gì đang diễn ra trong lượt này: hãy chuyển toàn bộ hành động thành văn xuôi sống động, đi qua từng bước theo đúng thứ tự, rồi mới kể phản ứng và hậu quả. Không bỏ qua bước nào, không rút gọn thành một câu, không chép nguyên văn phần tường thuật; giữ nguyên ý nghĩa lời thoại cụ thể. Mỗi đoạn phải thêm một hành động, thông tin, cảm xúc của NPC, hệ quả hoặc thay đổi tình thế mới. TUYỆT ĐỐI không kể lại cùng một hành động, hình ảnh, cảm xúc hay lời thoại bằng cách đổi vài từ; không quay lại cảnh đã kể và không dùng câu kết luận lặp để kéo dài. Bắt đầu ngay trong khoảnh khắc hành động diễn ra, không tóm tắt. Chỉ cho nhân vật chính thực hiện những gì người chơi đã nêu; không tự thêm quyết định, lời thoại hay suy nghĩ mới cho họ.',
       adultIntimacyRule(profile),
       'Chỉ xuất phần truyện có thể hiện cho người chơi. Không viết suy nghĩ nội bộ, phân tích, kế hoạch, lời dẫn meta, tiêu đề, đánh số đoạn hay Markdown. Không lặp lại yêu cầu.',
@@ -252,6 +376,8 @@
     const surprise = document.querySelector('#surprise-event').checked;
     const userMessage = [
       `${getWorldContext(profile)}\n\nDIỄN BIẾN GẦN ĐÂY (ưu tiên mạch mới nhất):\n${recentStory}`,
+      `BỘ NHỚ TỐI ĐA ${MAX_REMEMBERED_CHAPTERS} CHƯƠNG HOÀN TẤT GẦN NHẤT:\n${formatChapterMemory()}`,
+      `CÁC LƯỢT ĐÃ KỂ TRONG CHƯƠNG ${chapterState.chapterNumber} (không kể lại):\n${formatCurrentChapterContext()}`,
       `HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI:\n${action}`,
       surprise ? 'Hãy thêm một tình tiết bất ngờ hợp lý, có dấu hiệu gieo trước và không giải quyết mọi việc quá dễ dàng.' : '',
       'Hãy kể tiếp ngay từ hành động vừa rồi.'
@@ -287,10 +413,13 @@
       if (!answer) throw new Error('Model không trả về phần truyện.');
 
       answer.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean).forEach(part => addParagraph(part));
+      const chapterClosed = await recordTurn(action, answer, model);
       inputs.innerHTML = '';
       document.querySelector('#surprise-event').checked = false;
-      setStatus('ready');
-      help.textContent = `Đã nhận hồi đáp từ ${model}.`;
+      if (!chapterClosed) {
+        setStatus('ready');
+        help.textContent = `Đã nhận hồi đáp từ ${model}. Lượt ${chapterState.turns.length}/${TURNS_PER_CHAPTER} của chương ${chapterState.chapterNumber}; đang giữ trí nhớ ${chapterState.memories.length} chương trước.`;
+      }
       story.scrollTop = story.scrollHeight;
     } catch (error) {
       setStatus('error');
