@@ -292,6 +292,42 @@
     if (!foundDialogue) addParagraph(text.replace(/<\/?dialogue\b[^>]*>/gi, '').trim());
   }
 
+  // Local Ollama models sometimes ignore the XML contract and return quoted
+  // dialogue inline. Convert those quoted utterances into the same contract
+  // before rendering or saving the turn, so both prompt history and UI agree.
+  function normalizeQuotedDialogue(text, playerName) {
+    const quotePattern = /<dialogue\b[^>]*>[\s\S]*?<\/dialogue\s*>|“([^”]+)”|"([^"]+)"|「([^」]+)」/gi;
+    const attribution = '(?:nói|hỏi|đáp|trả lời|thì thầm|kêu lên|quát|gọi|lên tiếng|cất tiếng|lẩm bẩm|reo lên|thốt lên)';
+    let output = '';
+    let cursor = 0;
+    let match;
+    while ((match = quotePattern.exec(text))) {
+      output += text.slice(cursor, match.index);
+      if (match[0].toLowerCase().startsWith('<dialogue')) {
+        output += match[0];
+        cursor = quotePattern.lastIndex;
+        continue;
+      }
+      const spokenText = match[1] ?? match[2] ?? match[3] ?? '';
+      const before = text.slice(Math.max(0, match.index - 120), match.index);
+      const after = text.slice(quotePattern.lastIndex, Math.min(text.length, quotePattern.lastIndex + 100));
+      const name = '[\\p{Lu}][\\p{L}]+(?:\\s+[\\p{Lu}][\\p{L}]+){0,2}';
+      const tailAttribution = new RegExp(`(${name})(?:\\s+(?:khẽ|nhẹ nhàng|trầm giọng|vội|lạnh lùng|lớn tiếng|chậm rãi|mỉm cười))?\\s+${attribution}\\b`, 'u');
+      const afterMatch = after.match(tailAttribution);
+      const beforeMatch = [...before.matchAll(new RegExp(name + `\\s+${attribution}\\s*[:：]?`, 'gu'))].pop();
+      let speaker = afterMatch?.[1] || beforeMatch?.[0]?.match(new RegExp(name, 'u'))?.[0] || '';
+      if (!speaker) {
+        const playerMention = before.lastIndexOf(playerName);
+        const playerAfterMention = after.indexOf(playerName);
+        if (playerMention >= 0 && before.length - playerMention < 70 || playerAfterMention >= 0 && playerAfterMention < 45) speaker = playerName;
+      }
+      if (!speaker) speaker = 'Người đối diện';
+      output += `<dialogue speaker="${speaker}">${spokenText.trim()}</dialogue>`;
+      cursor = quotePattern.lastIndex;
+    }
+    return output + text.slice(cursor);
+  }
+
   window.renderNarrativeWithDialogue = (text, playerName) => {
     text.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean)
       .forEach(part => appendNarrationWithDialogue(part, playerName));
@@ -330,7 +366,7 @@
       'BỘ NHỚ CÁC CHƯƠNG TRƯỚC là dữ kiện liên tục đã được kể. Không tái diễn lại cảnh, hành động, lời thoại hoặc tiết lộ trong đó; chỉ nhắc ngắn nếu cần để nối mạch. Ưu tiên diễn biến mới và giải quyết các việc còn dang dở khi hành động hiện tại dẫn tới.',
       'Mỗi lượt phải làm thế giới tiến lên. Nếu hành động của người chơi chưa tự tạo ra một bước ngoặt, hãy đưa vào ít nhất một chuyển biến mới phù hợp (tin tức, mưu đồ phe phái, thử thách, cơ duyên hoặc biến cố môi trường); chọn loại khác với những lượt gần đây và không biến mọi chuyển biến thành chiến đấu.',
       'Mỗi lượt hồi đáp hướng tới khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn tự nhiên; chất lượng và mạch truyện quan trọng hơn việc cố kéo đủ chữ. HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI là dàn ý những gì đang diễn ra trong lượt này: hãy chuyển toàn bộ hành động thành văn xuôi sống động, đi qua từng bước theo đúng thứ tự, rồi mới kể phản ứng và hậu quả. Không bỏ qua bước nào, không rút gọn thành một câu, không chép nguyên văn phần tường thuật; giữ nguyên ý nghĩa lời thoại cụ thể. Mỗi đoạn phải thêm một hành động, thông tin, cảm xúc của NPC, hệ quả hoặc thay đổi tình thế mới. TUYỆT ĐỐI không kể lại cùng một hành động, hình ảnh, cảm xúc hay lời thoại bằng cách đổi vài từ; không quay lại cảnh đã kể và không dùng câu kết luận lặp để kéo dài. Bắt đầu ngay trong khoảnh khắc hành động diễn ra, không tóm tắt. Chỉ cho nhân vật chính thực hiện những gì người chơi đã nêu; không tự thêm quyết định, lời thoại hay suy nghĩ mới cho họ.',
-      'QUY CÁCH ĐỊNH DẠNG LỜI THOẠI (BẮT BUỘC): Mọi câu nhân vật thực sự nói ra, gồm lời của nhân vật chính lẫn NPC, phải được bọc đúng dạng <dialogue speaker="Tên nhân vật">Lời nói</dialogue>. Giữ nguyên ý và câu chữ lời người chơi đã nhập khi chuyển thành lời thoại của nhân vật chính. Không để lời nói trong dấu ngoặc kép ở ngoài thẻ; không bọc lời tường thuật, suy nghĩ, miêu tả hay tiếng động không phải lời nói trong thẻ. Phần kể chuyện luôn nằm ngoài thẻ. Mỗi lượt nói của một người là một thẻ riêng và speaker phải ghi đúng tên người nói.',
+      'ĐỊNH DẠNG ĐẦU RA CÓ CẤU TRÚC (BẮT BUỘC, KHÔNG ĐƯỢC BỎ QUA): Bất cứ câu nào một nhân vật nói thành tiếng đều phải nằm trong thẻ <dialogue speaker="Tên nhân vật">Lời nói</dialogue>. Quy tắc này áp dụng cho cả nhân vật chính và mọi NPC. Không viết lời thoại trần trong dấu ngoặc kép, không gắn lời thoại vào giữa đoạn tường thuật. Mẫu đúng: Nàng khựng bước. <dialogue speaker="Diệp Thần">Cô vừa nói gì?</dialogue> Người thiếu nữ siết cuốn sách trong tay. <dialogue speaker="Tống Thúy">Ta nói viên đá này có thể soi thấy quá khứ.</dialogue> Mẫu sai: Nàng hỏi: “Cô vừa nói gì?” Mỗi lượt nói có một thẻ riêng, speaker là tên chính xác người đang nói. Chỉ lời kể, hành động, suy nghĩ và miêu tả để ngoài thẻ. Trước khi trả lời, tự rà lại và bọc mọi câu thoại còn sót; chỉ xuất truyện, không xuất lời giải thích.',
       adultIntimacyRule(profile),
       worldDirective(profile),
       'Chỉ xuất phần truyện có thể hiện cho người chơi. Không viết suy nghĩ nội bộ, phân tích, kế hoạch, lời dẫn meta, tiêu đề, đánh số đoạn hay Markdown. Không lặp lại yêu cầu.',
@@ -361,7 +397,7 @@
                 'Tạo một tình huống riêng phù hợp với thế giới người chơi mô tả, gieo một bí ẩn, mối nguy hoặc cơ hội gắn với mục tiêu ban đầu. Kết ở một khoảnh khắc mở để người chơi tự quyết định bước tiếp theo.',
                 adultIntimacyRule(profile),
                 worldDirective(profile),
-                'Mọi câu thoại trong cảnh mở đầu cũng phải bọc trong <dialogue speaker="Tên nhân vật">Lời nói</dialogue>; lời kể và miêu tả để ngoài thẻ.',
+                'ĐỊNH DẠNG BẮT BUỘC: Mọi câu được nhân vật nói ra phải là <dialogue speaker="Tên nhân vật">Lời nói</dialogue>, kể cả thoại của nhân vật chính. Không viết câu thoại trong ngoặc kép ngoài thẻ và không gắn thoại vào đoạn kể. Ví dụ đúng: Mưa quất lên mái ngói. <dialogue speaker="Lâm Tuyết">Huynh nghe thấy tiếng động không?</dialogue> Ví dụ sai: Mưa quất lên mái ngói. “Huynh nghe thấy tiếng động không?” nàng hỏi. Hãy tự rà soát toàn bộ đầu ra trước khi kết thúc.',
                 'Viết một cảnh mở màn hoàn chỉnh dài khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn văn. Dành đủ dung lượng để cảnh diễn tiến tự nhiên qua hành động, đối thoại, không khí, giác quan, phản ứng của người xung quanh và một tình thế cụ thể; không lặp ý hay kéo dài bằng câu rỗng. Không dùng tiêu đề, lời mở đầu kiểu “Năm nay…”, câu tóm tắt kiểu “mang thân phận…”, danh sách, Markdown, phân tích hay suy nghĩ nội bộ. Không tự quyết định lựa chọn hoặc hành động quan trọng thay nhân vật chính.'
               ].join('\n\n')
             },
@@ -387,7 +423,7 @@
       }, 600000);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
-      const opening = removeRepeatedPassages(data.message?.content?.trim() || '');
+      const opening = removeRepeatedPassages(normalizeQuotedDialogue(data.message?.content?.trim() || '', profile.name));
       if (!opening) throw new Error('Model không trả về đoạn mở đầu.');
       setStatus('ready');
       help.textContent = `Đã tạo cảnh mở đầu bằng ${model}.`;
@@ -459,7 +495,7 @@
       }, 600000);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
-      const answer = removeRepeatedPassages(data.message?.content?.trim() || '');
+      const answer = removeRepeatedPassages(normalizeQuotedDialogue(data.message?.content?.trim() || '', profile.name));
       if (!answer) throw new Error('Model không trả về phần truyện.');
 
       answer.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean)
