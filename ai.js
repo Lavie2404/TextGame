@@ -156,19 +156,12 @@
       goal: getProfileValue('#origin-goal'),
       realm: document.querySelector('#player-realm')?.textContent || getProfileValue('#origin-realm'),
       nsfw: document.querySelector('#allow-nsfw')?.checked || false,
-      worldMode: document.querySelector('#origin-world')?.value || 'custom',
-      worldName: document.querySelector('#origin-world')?.selectedOptions[0]?.textContent?.trim() || 'Thế giới tự tạo'
+      worldName: getProfileValue('#origin-setting').split(/[\n;.!?]/)[0].slice(0, 80) || 'Thế giới tự tạo'
     };
   }
 
   function worldDirective(profile) {
-    if (profile.worldMode === 'douluo') {
-      return `THẾ GIỚI ĐÃ CHỌN: ĐẤU LA ĐẠI LỤC. Giữ nhất quán thế giới võ hồn, hồn lực, hồn hoàn, hồn kỹ, hồn thú, học viện và tông môn; có thể dùng các địa danh/phe phái phù hợp như Sử Lai Khắc Học Viện, Võ Hồn Điện, Hạo Thiên Tông và Tinh Đấu Đại Sâm Lâm. Dựa vào cấp bậc và luật sức mạnh này để tạo thử thách, cơ duyên, đối thủ và biến động phe phái. Không đưa đấu khí, dị hỏa hay hệ tu tiên vào. Nếu người chơi chỉ rõ thời kỳ/địa điểm thì bám theo; nếu không, chọn một giai đoạn hợp lý và không tự nhận sự kiện/chi tiết canon chưa chắc chắn là sự thật. Tạo tuyến sự kiện mới tương thích với thế giới và để nhân vật người chơi tự quyết định, không thay thế hoặc viết lại vai trò nhân vật trung tâm.`;
-    }
-    if (profile.worldMode === 'doupo') {
-      return `THẾ GIỚI ĐÃ CHỌN: ĐẤU PHÁ THƯƠNG KHUNG. Giữ nhất quán hệ đấu khí và các cấp bậc Đấu Chi Khí–Đấu Giả–Đấu Sư–Đấu Vương–Đấu Hoàng–Đấu Tông–Đấu Tôn–Đấu Thánh–Đấu Đế; có thể khai thác gia tộc, tông phái, luyện dược sư, đan dược, đấu kỹ, dị hỏa và di tích theo logic của thế giới. Các thế lực như Tiêu gia, Vân Lam Tông, Già Nam Học Viện, Hắc Giác Vực và Gia Mã Đế Quốc chỉ xuất hiện khi phù hợp thời kỳ/địa điểm. Không đưa võ hồn, hồn hoàn hay linh căn tu tiên vào. Nếu người chơi chỉ rõ thời kỳ/địa điểm thì bám theo; nếu không, chọn một giai đoạn hợp lý và không khẳng định chi tiết canon chưa chắc chắn. Tạo tuyến sự kiện mới tương thích, không viết lại nguyên tác hoặc tước quyền lựa chọn của nhân vật người chơi.`;
-    }
-    return `THẾ GIỚI TỰ TẠO: mô tả do người chơi cung cấp là luật nền có thẩm quyền. Suy ra hợp lý các phe phái, tài nguyên, quy tắc sức mạnh, hiểm họa và cơ hội từ mô tả đó; không tự nhập yếu tố của Đấu La Đại Lục, Đấu Phá Thương Khung hay thế giới khác. Giữ thế giới sống động bằng những diễn biến mới phù hợp và đa dạng (tin tức, mưu đồ phe phái, thử thách, cơ duyên, biến cố môi trường hoặc hệ quả xã hội); tránh lặp loại sự kiện và không mâu thuẫn dữ kiện đã xác lập.`;
+    return `THẾ GIỚI NGƯỜI CHƠI MUỐN TRẢI NGHIỆM: ${profile.setting || 'chưa mô tả'}. Đây có thể là một bộ truyện/tiểu thuyết nổi tiếng, một giai đoạn lịch sử hoặc một thế giới hoàn toàn mới. Nếu nhận ra tác phẩm, hãy dùng đúng hệ thống sức mạnh, phe phái, địa lý, nhân vật và mốc truyện phù hợp với mô tả; nếu là lịch sử, tôn trọng thời đại, địa danh, thiết chế và sự kiện đã biết, không đưa yếu tố hiện đại sai thời kỳ. Phần nhập của người chơi quyết định thời điểm, địa điểm và các thay đổi so với nguyên tác. Nếu không nhận biết chắc hoặc thiếu dữ kiện, đừng bịa chi tiết canon/lịch sử như sự thật; hãy tạo tuyến nhân vật và sự kiện phụ hợp lý trong khung đã nêu. Nếu là thế giới tự tạo, coi các quy tắc người chơi mô tả là luật nền, suy ra nhất quán phe phái, tài nguyên, sức mạnh, hiểm họa và cơ hội. Trong mọi kiểu thế giới, mỗi lượt cần có diễn biến mới phù hợp hành động và bối cảnh; không trộn cơ chế từ tác phẩm/thời đại khác, không viết lại nguyên tác, và không tước quyền lựa chọn của nhân vật người chơi.`;
   }
 
   function getPlayerAction() {
@@ -195,8 +188,8 @@
       .join('; ');
     return [
       `HỒ SƠ: ${profile.name}; ${profile.age || 'tuổi chưa rõ'}; thân phận ${profile.identity || 'chưa rõ'}; cảnh giới ${profile.realm || 'chưa rõ'}.`,
-      `KIỂU THẾ GIỚI: ${profile.worldName || 'Thế giới tự tạo'}.`,
-      `THẾ GIỚI / CHI TIẾT BỔ SUNG: ${profile.setting || 'theo thiết lập của thế giới đã chọn'}`,
+      `THẾ GIỚI MUỐN CHƠI: ${profile.worldName || 'Thế giới tự tạo'}.`,
+      `MÔ TẢ THẾ GIỚI VÀ MỐC THỜI GIAN: ${profile.setting || 'chưa thiết lập'}`,
       `MỤC TIÊU: ${profile.goal || 'chưa đặt mục tiêu cụ thể'}`,
       `CHỈ SỐ HIỆN TẠI: ${stats}.`,
       `TRANG BỊ ĐANG CÓ: ${readItems('#equipment-list').join('; ') || 'chưa ghi nhận'}.`,
@@ -336,7 +329,6 @@
               content: [
                 `Tên nhân vật: ${profile.name}.`,
                 `Tuổi: ${profile.age}.`,
-                `Kiểu thế giới: ${profile.worldName || 'Thế giới tự tạo'}.`,
                 `Thân phận: ${profile.identity}.`,
                 `Cảnh giới bắt đầu: ${profile.realm}, cấp ${profile.level}.`,
                 `Bối cảnh thế giới: ${profile.setting}.`,
