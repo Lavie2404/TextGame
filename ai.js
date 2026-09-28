@@ -115,6 +115,65 @@
     ].filter(Boolean).join('\n\n');
   }
 
+  async function generateOpeningText(profile) {
+    const model = modelInput.value.trim();
+    if (!model) throw new Error('Hãy nhập tên model Ollama ở phần Người dẫn truyện AI.');
+    setStatus('writing', 'AI đang dựng cảnh mở đầu…');
+    help.textContent = `Đang yêu cầu ${model} viết cảnh mở đầu từ hồ sơ nhân vật và bối cảnh.`;
+    try {
+      const response = await fetchWithTimeout(`${OLLAMA_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: 'system',
+              content: [
+                'Ngươi là tác giả mở màn cho game tiên hiệp tương tác Vạn Giới Ký. Hãy kể bằng tiếng Việt tự nhiên, giàu hình ảnh, câu văn có nhịp điệu và cổ phong vừa phải.',
+                'Hãy DỰNG MỘT CẢNH ĐANG DIỄN RA, không tóm tắt hồ sơ, không kể tiểu sử và không diễn giải lại các ô thông tin. Mở bằng một khoảnh khắc cụ thể có địa điểm, giác quan và biến động; để thân phận, cảnh giới, mục tiêu hiện ra qua chi tiết, phản ứng của người khác và tình thế của nhân vật.',
+                'Tạo một tình huống riêng phù hợp với thế giới người chơi mô tả, gieo một bí ẩn, mối nguy hoặc cơ hội gắn với mục tiêu ban đầu. Kết ở một khoảnh khắc mở để người chơi tự quyết định bước tiếp theo.',
+                'Viết 3–5 đoạn văn, khoảng 220–350 từ. Không dùng tiêu đề, lời mở đầu kiểu “Năm nay…”, câu tóm tắt kiểu “mang thân phận…”, danh sách, Markdown, phân tích hay suy nghĩ nội bộ. Không tự quyết định lựa chọn hoặc hành động quan trọng thay nhân vật chính.'
+              ].join('\n\n')
+            },
+            {
+              role: 'user',
+              content: [
+                `Tên nhân vật: ${profile.name}.`,
+                `Tuổi: ${profile.age}.`,
+                `Thân phận: ${profile.identity}.`,
+                `Cảnh giới bắt đầu: ${profile.realm}, cấp ${profile.level}.`,
+                `Bối cảnh thế giới: ${profile.setting}.`,
+                `Mục tiêu ban đầu: ${profile.goal || 'Chưa đặt mục tiêu cụ thể.'}`,
+                'Dùng các dữ kiện này làm nền để viết cảnh mở màn có hành động và không khí. Tuyệt đối đừng liệt kê hay nhắc lại chúng như một bản tóm tắt.'
+              ].join('\n')
+            }
+          ],
+          think: false,
+          stream: false,
+          keep_alive: '10m',
+          options: { temperature: 0.9, top_p: 0.94, repeat_penalty: 1.12, num_predict: 850 }
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
+      const opening = data.message?.content?.trim();
+      if (!opening) throw new Error('Model không trả về đoạn mở đầu.');
+      setStatus('ready');
+      help.textContent = `Đã tạo cảnh mở đầu bằng ${model}.`;
+      return opening;
+    } catch (error) {
+      setStatus('error');
+      setHelpForError(error);
+      if (error?.name === 'TypeError' && location.protocol === 'https:') {
+        throw new Error('Không kết nối được Ollama trên máy này. Kiểm tra Ollama đang chạy và đã cho phép origin https://lavie2404.github.io.');
+      }
+      throw error;
+    }
+  }
+
+  window.generateOpeningText = generateOpeningText;
+
   async function playAI() {
     const action = getPlayerAction();
     if (!action) {
@@ -193,10 +252,4 @@
 
   checkButton.addEventListener('click', checkConnection);
   turnButton.addEventListener('click', playAI);
-  document.querySelector('#origin-form').addEventListener('submit', () => {
-    setTimeout(() => {
-      setStatus('idle');
-      help.textContent = 'Ollama phải đang chạy trên máy này. AI tạo tiếp diễn biến từ nội dung bạn nhập và câu chuyện hiện có.';
-    }, 0);
-  });
 })();
