@@ -11,7 +11,7 @@
     idle: 'Chưa kết nối Ollama',
     busy: 'Đang kết nối…',
     ready: 'Ollama đã sẵn sàng',
-    writing: 'AI đang viết…',
+    writing: 'AI đang viết đoạn dài…',
     error: 'Không kết nối được Ollama'
   };
 
@@ -106,7 +106,7 @@
   function buildSystemPrompt(profile, initialScene) {
     return [
       'Ngươi là người dẫn truyện tương tác cho game tiên hiệp Vạn Giới Ký. Viết hoàn toàn bằng tiếng Việt tự nhiên, giàu hình ảnh và có nhịp kể cuốn hút; dùng từ cổ phong vừa phải, không dịch sát văn phong tiếng Anh.',
-      'Tiếp nối nhất quán bối cảnh và các sự kiện đã xảy ra. Kể 2–4 đoạn ngắn, tập trung vào phản ứng của thế giới và hậu quả trực tiếp của hành động người chơi. Có thể đưa NPC, nguy cơ hoặc cơ duyên vào truyện; không tự quyết định hành động, suy nghĩ hay lời thoại mới của nhân vật chính thay người chơi.',
+      'Tiếp nối nhất quán bối cảnh và các sự kiện đã xảy ra. Mỗi lượt hồi đáp cần là một phần truyện dài khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn văn có nhịp điệu tự nhiên. Phát triển đầy đủ hậu quả trực tiếp của hành động, phản ứng của NPC và thế giới, không khí, giác quan, đối thoại và những diễn biến hợp lý tiếp theo; giữ mạch truyện cụ thể, giàu chi tiết nhưng không lặp ý hoặc kéo dài bằng câu rỗng. Không tóm tắt hay nhắc lại hành động người chơi. Có thể đưa NPC, nguy cơ hoặc cơ duyên vào truyện; không tự quyết định hành động, suy nghĩ hay lời thoại mới của nhân vật chính thay người chơi.',
       'Chỉ xuất phần truyện có thể hiện cho người chơi. Không viết suy nghĩ nội bộ, phân tích, kế hoạch, lời dẫn meta, tiêu đề, đánh số đoạn hay Markdown. Không lặp lại yêu cầu.',
       `HỒ SƠ NHÂN VẬT: ${profile.name}${profile.age ? `, ${profile.age} tuổi` : ''}; thân phận: ${profile.identity || 'chưa xác định'}; cảnh giới: ${profile.realm || 'chưa xác định'}.`,
       `BỐI CẢNH THẾ GIỚI: ${profile.setting || 'Thế giới tu tiên với tông môn, cảnh giới, bí cảnh và cơ duyên.'}`,
@@ -133,7 +133,7 @@
                 'Ngươi là tác giả mở màn cho game tiên hiệp tương tác Vạn Giới Ký. Hãy kể bằng tiếng Việt tự nhiên, giàu hình ảnh, câu văn có nhịp điệu và cổ phong vừa phải.',
                 'Hãy DỰNG MỘT CẢNH ĐANG DIỄN RA, không tóm tắt hồ sơ, không kể tiểu sử và không diễn giải lại các ô thông tin. Mở bằng một khoảnh khắc cụ thể có địa điểm, giác quan và biến động; để thân phận, cảnh giới, mục tiêu hiện ra qua chi tiết, phản ứng của người khác và tình thế của nhân vật.',
                 'Tạo một tình huống riêng phù hợp với thế giới người chơi mô tả, gieo một bí ẩn, mối nguy hoặc cơ hội gắn với mục tiêu ban đầu. Kết ở một khoảnh khắc mở để người chơi tự quyết định bước tiếp theo.',
-                'Viết 3–5 đoạn văn, khoảng 220–350 từ. Không dùng tiêu đề, lời mở đầu kiểu “Năm nay…”, câu tóm tắt kiểu “mang thân phận…”, danh sách, Markdown, phân tích hay suy nghĩ nội bộ. Không tự quyết định lựa chọn hoặc hành động quan trọng thay nhân vật chính.'
+                'Viết một cảnh mở màn hoàn chỉnh dài khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn văn. Dành đủ dung lượng để cảnh diễn tiến tự nhiên qua hành động, đối thoại, không khí, giác quan, phản ứng của người xung quanh và một tình thế cụ thể; không lặp ý hay kéo dài bằng câu rỗng. Không dùng tiêu đề, lời mở đầu kiểu “Năm nay…”, câu tóm tắt kiểu “mang thân phận…”, danh sách, Markdown, phân tích hay suy nghĩ nội bộ. Không tự quyết định lựa chọn hoặc hành động quan trọng thay nhân vật chính.'
               ].join('\n\n')
             },
             {
@@ -152,9 +152,9 @@
           think: false,
           stream: false,
           keep_alive: '10m',
-          options: { temperature: 0.9, top_p: 0.94, repeat_penalty: 1.12, num_predict: 850 }
+          options: { temperature: 0.9, top_p: 0.94, repeat_penalty: 1.12, num_predict: 6000 }
         })
-      });
+      }, 600000);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
       const opening = data.message?.content?.trim();
@@ -207,7 +207,7 @@
     turnButton.dataset.originalText = turnButton.textContent;
     turnButton.textContent = 'Đang chờ AI…';
     setStatus('writing');
-    help.textContent = 'Model đang tạo diễn biến; lần gọi đầu có thể mất nhiều thời gian để nạp vào bộ nhớ.';
+    help.textContent = 'Model đang viết phần truyện dài khoảng 1.500–2.000 từ; có thể mất vài phút, nhất là lần gọi đầu.';
 
     try {
       const response = await fetchWithTimeout(`${OLLAMA_URL}/api/chat`, {
@@ -222,9 +222,9 @@
           think: false,
           stream: false,
           keep_alive: '10m',
-          options: { temperature: 0.85, top_p: 0.92, repeat_penalty: 1.12, num_predict: 700 }
+          options: { temperature: 0.85, top_p: 0.92, repeat_penalty: 1.12, num_predict: 6000 }
         })
-      });
+      }, 600000);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
       const answer = data.message?.content?.trim();
