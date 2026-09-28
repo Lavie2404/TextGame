@@ -129,11 +129,37 @@
     story.append(paragraph);
   }
 
+  function textNgrams(text) {
+    const words = text.toLocaleLowerCase('vi').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .match(/[a-z0-9]+/g) || [];
+    const grams = new Set();
+    for (let i = 0; i < words.length - 2; i++) grams.add(words.slice(i, i + 3).join(' '));
+    return { words: words.length, grams };
+  }
+
+  function isNearDuplicate(left, right) {
+    const a = textNgrams(left);
+    const b = textNgrams(right);
+    if (Math.min(a.words, b.words) < 24 || !a.grams.size || !b.grams.size) return false;
+    let shared = 0;
+    for (const gram of a.grams) if (b.grams.has(gram)) shared++;
+    return shared / Math.min(a.grams.size, b.grams.size) >= 0.88 ||
+      shared / (a.grams.size + b.grams.size - shared) >= 0.76;
+  }
+
+  function removeRepeatedPassages(text) {
+    const kept = [];
+    for (const paragraph of text.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean)) {
+      if (!kept.some(previous => isNearDuplicate(paragraph, previous))) kept.push(paragraph);
+    }
+    return kept.join('\n\n');
+  }
+
   function buildSystemPrompt(profile, initialScene) {
     return [
       'Ngươi là người dẫn truyện tương tác cho game tiên hiệp Vạn Giới Ký. Viết hoàn toàn bằng tiếng Việt tự nhiên, giàu hình ảnh và có nhịp kể cuốn hút; dùng từ cổ phong vừa phải, không dịch sát văn phong tiếng Anh.',
       'Tiếp nối nhất quán bối cảnh và sự kiện đã xảy ra. Dùng hồ sơ thế giới, mục tiêu, chỉ số, trang bị, kỹ năng và đoạn truyện gần nhất làm ngữ cảnh bắt buộc; ưu tiên chi tiết đã được xác lập, không tự đổi tuổi, thân phận, địa điểm, quan hệ, quy tắc sức mạnh hoặc trạng thái tài nguyên. Nếu thiếu thông tin, không khẳng định chi tiết mới như sự thật đã có.',
-      'Mỗi lượt hồi đáp là một phần truyện dài khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn tự nhiên. HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI là dàn ý những gì đang diễn ra trong lượt này: hãy chuyển toàn bộ hành động thành văn xuôi sống động, đi qua từng bước theo đúng thứ tự, rồi mới kể phản ứng và hậu quả. Không bỏ qua bước nào, không rút gọn thành một câu, không chép nguyên văn phần tường thuật; giữ nguyên ý nghĩa lời thoại cụ thể. Phát triển thêm không khí, giác quan, phản ứng của NPC và thế giới cùng hệ quả hợp lý; giàu chi tiết nhưng không lặp ý hoặc kéo dài bằng câu rỗng. Bắt đầu ngay trong khoảnh khắc hành động diễn ra, không tóm tắt. Chỉ cho nhân vật chính thực hiện những gì người chơi đã nêu; không tự thêm quyết định, lời thoại hay suy nghĩ mới cho họ.',
+      'Mỗi lượt hồi đáp hướng tới khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn tự nhiên; chất lượng và mạch truyện quan trọng hơn việc cố kéo đủ chữ. HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI là dàn ý những gì đang diễn ra trong lượt này: hãy chuyển toàn bộ hành động thành văn xuôi sống động, đi qua từng bước theo đúng thứ tự, rồi mới kể phản ứng và hậu quả. Không bỏ qua bước nào, không rút gọn thành một câu, không chép nguyên văn phần tường thuật; giữ nguyên ý nghĩa lời thoại cụ thể. Mỗi đoạn phải thêm một hành động, thông tin, cảm xúc của NPC, hệ quả hoặc thay đổi tình thế mới. TUYỆT ĐỐI không kể lại cùng một hành động, hình ảnh, cảm xúc hay lời thoại bằng cách đổi vài từ; không quay lại cảnh đã kể và không dùng câu kết luận lặp để kéo dài. Bắt đầu ngay trong khoảnh khắc hành động diễn ra, không tóm tắt. Chỉ cho nhân vật chính thực hiện những gì người chơi đã nêu; không tự thêm quyết định, lời thoại hay suy nghĩ mới cho họ.',
       adultIntimacyRule(profile),
       'Chỉ xuất phần truyện có thể hiện cho người chơi. Không viết suy nghĩ nội bộ, phân tích, kế hoạch, lời dẫn meta, tiêu đề, đánh số đoạn hay Markdown. Không lặp lại yêu cầu.',
       `HỒ SƠ NHÂN VẬT: ${profile.name}${profile.age ? `, ${profile.age} tuổi` : ''}; thân phận: ${profile.identity || 'chưa xác định'}; cảnh giới: ${profile.realm || 'chưa xác định'}.`,
@@ -182,12 +208,12 @@
           think: false,
           stream: false,
           keep_alive: '10m',
-          options: { temperature: 0.9, top_p: 0.94, repeat_penalty: 1.12, num_predict: 6000 }
+          options: { temperature: 0.85, top_p: 0.92, repeat_penalty: 1.18, repeat_last_n: 512, num_predict: 6000 }
         })
       }, 600000);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
-      const opening = data.message?.content?.trim();
+      const opening = removeRepeatedPassages(data.message?.content?.trim() || '');
       if (!opening) throw new Error('Model không trả về đoạn mở đầu.');
       setStatus('ready');
       help.textContent = `Đã tạo cảnh mở đầu bằng ${model}.`;
@@ -252,12 +278,12 @@
           think: false,
           stream: false,
           keep_alive: '10m',
-          options: { temperature: 0.85, top_p: 0.92, repeat_penalty: 1.12, num_predict: 6000 }
+          options: { temperature: 0.8, top_p: 0.9, repeat_penalty: 1.18, repeat_last_n: 512, num_predict: 6000 }
         })
       }, 600000);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
-      const answer = data.message?.content?.trim();
+      const answer = removeRepeatedPassages(data.message?.content?.trim() || '');
       if (!answer) throw new Error('Model không trả về phần truyện.');
 
       answer.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean).forEach(part => addParagraph(part));
