@@ -47,9 +47,6 @@
   function updateChapterProgress() {
     const chapterLabel = document.querySelector('.chapter span');
     if (chapterLabel) chapterLabel.textContent = `CHƯƠNG ${String(chapterState.chapterNumber).padStart(2, '0')}`;
-    const tabs = [...document.querySelectorAll('#action-tabs button')];
-    const currentTurn = chapterState.turns.length;
-    tabs.forEach((tab, index) => tab.classList.toggle('active', index === currentTurn));
   }
 
   window.resetChapterMemory = () => {
