@@ -66,9 +66,34 @@
     if (!chapterState.turns.length) return 'Chưa có lượt nào khác trong chương hiện tại.';
     return chapterState.turns.map((turn, index) => {
       const paragraphs = turn.narrative.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean);
-      const highlights = [...paragraphs.slice(0, 1), ...paragraphs.slice(-1)];
-      return `LƯỢT ${index + 1} — HÀNH ĐỘNG: ${turn.action}\nDIỄN BIẾN ĐÃ KỂ: ${[...new Set(highlights)].join(' ').slice(0, 900)}`;
+      const latestTurn = index === chapterState.turns.length - 1;
+      const excerpts = latestTurn
+        ? [turn.narrative.slice(-3200)]
+        : [...paragraphs.slice(0, 1).map(value => value.slice(0, 300)), ...paragraphs.slice(-1).map(value => value.slice(-500))];
+      return `LƯỢT ${index + 1} — HÀNH ĐỘNG NGƯỜI CHƠI: ${turn.action}\nDIỄN BIẾN VÀ KẾT QUẢ ĐÃ XẢY RA: ${[...new Set(excerpts)].join('\n')}`;
     }).join('\n\n');
+  }
+
+  function formatRecentStoryContext(maxCharacters = 5600) {
+    const entries = [...story.children]
+      .filter(node => node.matches('.narration, .story-entry'))
+      .map(node => {
+        if (node.matches('.story-entry')) {
+          const speaker = node.querySelector('.speaker')?.textContent.trim() || 'Nhân vật';
+          const line = node.querySelector('dialogue')?.textContent.trim() || '';
+          return line ? `${speaker} nói: ${line}` : '';
+        }
+        return node.textContent.trim();
+      }).filter(Boolean);
+    const recent = [];
+    let length = 0;
+    for (const entry of entries.reverse()) {
+      const excerpt = entry.length > 1000 ? entry.slice(-1000) : entry;
+      if (length + excerpt.length > maxCharacters && recent.length) break;
+      recent.push(excerpt);
+      length += excerpt.length;
+    }
+    return recent.reverse().join('\n\n') || story.innerText.trim().slice(-maxCharacters);
   }
 
   function fallbackChapterSummary(turns) {
@@ -392,22 +417,21 @@
     }
   }
 
-  function buildSystemPrompt(profile, initialScene) {
+  function buildSystemPrompt(profile) {
     return [
       'Ngươi là người dẫn truyện tương tác cho game tiên hiệp Vạn Giới Ký. Viết hoàn toàn bằng tiếng Việt tự nhiên, giàu hình ảnh và có nhịp kể cuốn hút; dùng từ cổ phong vừa phải, không dịch sát văn phong tiếng Anh.',
       'Tiếp nối nhất quán bối cảnh và sự kiện đã xảy ra. Dùng hồ sơ thế giới, mục tiêu, chỉ số, trang bị, kỹ năng và đoạn truyện gần nhất làm ngữ cảnh bắt buộc; ưu tiên chi tiết đã được xác lập, không tự đổi tuổi, thân phận, địa điểm, quan hệ, quy tắc sức mạnh hoặc trạng thái tài nguyên. Nếu thiếu thông tin, không khẳng định chi tiết mới như sự thật đã có.',
       'BỘ NHỚ CÁC CHƯƠNG TRƯỚC là dữ kiện liên tục đã được kể. Không tái diễn lại cảnh, hành động, lời thoại hoặc tiết lộ trong đó; chỉ nhắc ngắn nếu cần để nối mạch. Ưu tiên diễn biến mới và giải quyết các việc còn dang dở khi hành động hiện tại dẫn tới.',
       'Trong chương hiện tại, không sao chép lại bất kỳ câu, đoạn văn hay cảnh nào đã xuất hiện trong phần truyện gần đây, kể cả khi thay đổi vài từ. Chỉ nhắc lại dữ kiện cũ khi cần cho mạch truyện; không dựng lại cùng một khung cảnh hoặc hồi tưởng đã kể.',
-      'Mỗi lượt phải làm thế giới tiến lên. Nếu hành động của người chơi chưa tự tạo ra một bước ngoặt, hãy đưa vào ít nhất một chuyển biến mới phù hợp (tin tức, mưu đồ phe phái, thử thách, cơ duyên hoặc biến cố môi trường); chọn loại khác với những lượt gần đây và không biến mọi chuyển biến thành chiến đấu.',
-      'Mỗi lượt hồi đáp hướng tới khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn tự nhiên; chất lượng và mạch truyện quan trọng hơn việc cố kéo đủ chữ. HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI là dàn ý những gì đang diễn ra trong lượt này: hãy chuyển toàn bộ hành động thành văn xuôi sống động, đi qua từng bước theo đúng thứ tự, rồi mới kể phản ứng và hậu quả. Không bỏ qua bước nào, không rút gọn thành một câu, không chép nguyên văn phần tường thuật; giữ nguyên ý nghĩa lời thoại cụ thể. Mỗi đoạn phải thêm một hành động, thông tin, cảm xúc của NPC, hệ quả hoặc thay đổi tình thế mới. TUYỆT ĐỐI không kể lại cùng một hành động, hình ảnh, cảm xúc hay lời thoại bằng cách đổi vài từ; không quay lại cảnh đã kể và không dùng câu kết luận lặp để kéo dài. Bắt đầu ngay trong khoảnh khắc hành động diễn ra, không tóm tắt. Chỉ cho nhân vật chính thực hiện những gì người chơi đã nêu; không tự thêm quyết định, lời thoại hay suy nghĩ mới cho họ.',
+      'MẠCH TRUYỆN VÀ HỒI ĐÁP TRỰC TIẾP (ƯU TIÊN CAO NHẤT): Đọc HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI và DIỄN BIẾN GẦN ĐÂY trước khi viết. Tiếp tục đúng cảnh, địa điểm, thời điểm, người đang có mặt và việc đang dang dở ở cuối phần gần đây. Nếu người chơi hỏi hoặc nói với một nhân vật, nhân vật đó phải nghe và trả lời đúng trọng tâm ngay trong lượt này; không né câu hỏi, không để người khác trả lời thay nếu không có lý do trong cảnh. Sau câu trả lời, mới kể nét mặt, hành động và hệ quả có quan hệ nhân quả rõ với câu hỏi/hành động ấy. Mỗi đoạn phải nối với đoạn ngay trước bằng hành động, lời đáp, phản ứng hoặc hệ quả; không tự chuyển cảnh, đổi chủ đề, thêm người lạ hay biến cố bất chợt không liên quan. Không bắt buộc tạo bước ngoặt ở mọi lượt; chỉ thêm sự kiện mới khi nó phát sinh hợp lý từ hành động hiện tại hoặc người chơi bật tùy chọn tình tiết bất ngờ. Không tự bịa rằng NPC đã biết điều chưa được tiết lộ.',
+      'Mỗi lượt hồi đáp hướng tới khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn tự nhiên; chất lượng và mạch truyện quan trọng hơn độ dài. Chuyển hành động người chơi thành văn xuôi theo đúng thứ tự, không bỏ qua bước nào, không chép nguyên văn phần tường thuật; giữ đúng nội dung lời thoại. Mỗi đoạn phải đóng góp diễn biến, phản ứng, thông tin hoặc hệ quả mới gắn với cảnh đang diễn ra. Không lặp lại cùng hành động/hình ảnh/lời thoại; không kéo dài bằng câu rỗng. Bắt đầu ngay tại thời điểm câu chuyện đang dở. Chỉ cho nhân vật chính thực hiện những gì người chơi đã nêu; không tự thêm quyết định, lời thoại hay suy nghĩ mới cho họ.',
       'ĐỊNH DẠNG ĐẦU RA CÓ CẤU TRÚC (BẮT BUỘC, KHÔNG ĐƯỢC BỎ QUA): Bất cứ câu nào một nhân vật nói thành tiếng đều phải nằm trong thẻ <dialogue speaker="Tên nhân vật">Lời nói</dialogue>. Quy tắc này áp dụng cho cả nhân vật chính và mọi NPC. Không viết lời thoại trần trong dấu ngoặc kép, không gắn lời thoại vào giữa đoạn tường thuật. Mẫu đúng: Nàng khựng bước. <dialogue speaker="Diệp Thần">Cô vừa nói gì?</dialogue> Người thiếu nữ siết cuốn sách trong tay. <dialogue speaker="Tống Thúy">Ta nói viên đá này có thể soi thấy quá khứ.</dialogue> Mẫu sai: Nàng hỏi: “Cô vừa nói gì?” Mỗi lượt nói có một thẻ riêng, speaker là tên chính xác người đang nói. Chỉ lời kể, hành động, suy nghĩ và miêu tả để ngoài thẻ. Âm thanh, tiếng động, từ mô phỏng tiếng động như “phịch”, “vù”, “rầm”, “keng” là tường thuật, tuyệt đối không cho vào thẻ thoại. Tuyệt đối không dùng chữ Hán hoặc từ viết bằng chữ Hán; chỉ viết tiếng Việt bằng chữ Quốc ngữ. Trước khi trả lời, tự rà lại và bọc mọi câu thoại còn sót; chỉ xuất truyện, không xuất lời giải thích.',
       adultIntimacyRule(profile),
       worldDirective(profile),
       'Chỉ xuất phần truyện có thể hiện cho người chơi. Không viết suy nghĩ nội bộ, phân tích, kế hoạch, lời dẫn meta, tiêu đề, đánh số đoạn hay Markdown. Không lặp lại yêu cầu.',
       `HỒ SƠ NHÂN VẬT: ${profile.name}${profile.age ? `, ${profile.age} tuổi` : ''}; thân phận: ${profile.identity || 'chưa xác định'}; cảnh giới: ${profile.realm || 'chưa xác định'}.`,
       `BỐI CẢNH THẾ GIỚI: ${profile.setting || 'Thế giới tu tiên với tông môn, cảnh giới, bí cảnh và cơ duyên.'}`,
-      `MỤC TIÊU: ${profile.goal || 'Tiếp tục hành trình tu hành theo lựa chọn của người chơi.'}`,
-      initialScene ? `MỞ ĐẦU CÂU CHUYỆN:\n${initialScene}` : ''
+      `MỤC TIÊU: ${profile.goal || 'Tiếp tục hành trình tu hành theo lựa chọn của người chơi.'}`
     ].filter(Boolean).join('\n\n');
   }
 
@@ -491,8 +515,7 @@
     }
 
     const profile = getProfile();
-    const initialScene = story.innerText.trim().slice(0, 1800);
-    const recentStory = story.innerText.trim().slice(-6000);
+    const recentStory = formatRecentStoryContext();
     const surprise = document.querySelector('#surprise-event').checked;
     const userMessage = [
       `${getWorldContext(profile)}\n\nDIỄN BIẾN GẦN ĐÂY (ưu tiên mạch mới nhất):\n${recentStory}`,
@@ -500,7 +523,7 @@
       `CÁC LƯỢT ĐÃ KỂ TRONG CHƯƠNG ${chapterState.chapterNumber} (không kể lại):\n${formatCurrentChapterContext()}`,
       `HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI:\n${action}`,
       surprise ? 'Hãy thêm một tình tiết bất ngờ hợp lý, có dấu hiệu gieo trước và không giải quyết mọi việc quá dễ dàng.' : '',
-      'Hãy kể tiếp ngay từ hành động vừa rồi.'
+      'YÊU CẦU LƯỢT NÀY: Tiếp tục liền mạch từ câu cuối cùng trong diễn biến gần đây. Thực hiện đúng hành động người chơi vừa nhập. Nếu đó là câu hỏi, hãy để đúng người được hỏi trả lời chính xác câu hỏi trước khi mở rộng cảnh. Không đưa thêm sự kiện ngoài mạch.'
     ].filter(Boolean).join('\n\n');
 
     turnButton.disabled = true;
@@ -518,13 +541,13 @@
         body: JSON.stringify({
           model,
           messages: [
-            { role: 'system', content: buildSystemPrompt(profile, initialScene) },
+            { role: 'system', content: buildSystemPrompt(profile) },
             { role: 'user', content: userMessage }
           ],
           think: false,
           stream: false,
           keep_alive: '10m',
-          options: { temperature: 0.8, top_p: 0.9, repeat_penalty: 1.18, repeat_last_n: 512, num_predict: 6000 }
+          options: { temperature: 0.65, top_p: 0.85, repeat_penalty: 1.18, repeat_last_n: 512, num_predict: 6000 }
         })
       }, 600000);
       const data = await response.json();
