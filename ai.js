@@ -155,8 +155,20 @@
       setting: getProfileValue('#origin-setting'),
       goal: getProfileValue('#origin-goal'),
       realm: document.querySelector('#player-realm')?.textContent || getProfileValue('#origin-realm'),
-      nsfw: document.querySelector('#allow-nsfw')?.checked || false
+      nsfw: document.querySelector('#allow-nsfw')?.checked || false,
+      worldMode: document.querySelector('#origin-world')?.value || 'custom',
+      worldName: document.querySelector('#origin-world')?.selectedOptions[0]?.textContent?.trim() || 'Thế giới tự tạo'
     };
+  }
+
+  function worldDirective(profile) {
+    if (profile.worldMode === 'douluo') {
+      return `THẾ GIỚI ĐÃ CHỌN: ĐẤU LA ĐẠI LỤC. Giữ nhất quán thế giới võ hồn, hồn lực, hồn hoàn, hồn kỹ, hồn thú, học viện và tông môn; có thể dùng các địa danh/phe phái phù hợp như Sử Lai Khắc Học Viện, Võ Hồn Điện, Hạo Thiên Tông và Tinh Đấu Đại Sâm Lâm. Dựa vào cấp bậc và luật sức mạnh này để tạo thử thách, cơ duyên, đối thủ và biến động phe phái. Không đưa đấu khí, dị hỏa hay hệ tu tiên vào. Nếu người chơi chỉ rõ thời kỳ/địa điểm thì bám theo; nếu không, chọn một giai đoạn hợp lý và không tự nhận sự kiện/chi tiết canon chưa chắc chắn là sự thật. Tạo tuyến sự kiện mới tương thích với thế giới và để nhân vật người chơi tự quyết định, không thay thế hoặc viết lại vai trò nhân vật trung tâm.`;
+    }
+    if (profile.worldMode === 'doupo') {
+      return `THẾ GIỚI ĐÃ CHỌN: ĐẤU PHÁ THƯƠNG KHUNG. Giữ nhất quán hệ đấu khí và các cấp bậc Đấu Chi Khí–Đấu Giả–Đấu Sư–Đấu Vương–Đấu Hoàng–Đấu Tông–Đấu Tôn–Đấu Thánh–Đấu Đế; có thể khai thác gia tộc, tông phái, luyện dược sư, đan dược, đấu kỹ, dị hỏa và di tích theo logic của thế giới. Các thế lực như Tiêu gia, Vân Lam Tông, Già Nam Học Viện, Hắc Giác Vực và Gia Mã Đế Quốc chỉ xuất hiện khi phù hợp thời kỳ/địa điểm. Không đưa võ hồn, hồn hoàn hay linh căn tu tiên vào. Nếu người chơi chỉ rõ thời kỳ/địa điểm thì bám theo; nếu không, chọn một giai đoạn hợp lý và không khẳng định chi tiết canon chưa chắc chắn. Tạo tuyến sự kiện mới tương thích, không viết lại nguyên tác hoặc tước quyền lựa chọn của nhân vật người chơi.`;
+    }
+    return `THẾ GIỚI TỰ TẠO: mô tả do người chơi cung cấp là luật nền có thẩm quyền. Suy ra hợp lý các phe phái, tài nguyên, quy tắc sức mạnh, hiểm họa và cơ hội từ mô tả đó; không tự nhập yếu tố của Đấu La Đại Lục, Đấu Phá Thương Khung hay thế giới khác. Giữ thế giới sống động bằng những diễn biến mới phù hợp và đa dạng (tin tức, mưu đồ phe phái, thử thách, cơ duyên, biến cố môi trường hoặc hệ quả xã hội); tránh lặp loại sự kiện và không mâu thuẫn dữ kiện đã xác lập.`;
   }
 
   function getPlayerAction() {
@@ -183,7 +195,8 @@
       .join('; ');
     return [
       `HỒ SƠ: ${profile.name}; ${profile.age || 'tuổi chưa rõ'}; thân phận ${profile.identity || 'chưa rõ'}; cảnh giới ${profile.realm || 'chưa rõ'}.`,
-      `THẾ GIỚI: ${profile.setting || 'chưa thiết lập'}`,
+      `KIỂU THẾ GIỚI: ${profile.worldName || 'Thế giới tự tạo'}.`,
+      `THẾ GIỚI / CHI TIẾT BỔ SUNG: ${profile.setting || 'theo thiết lập của thế giới đã chọn'}`,
       `MỤC TIÊU: ${profile.goal || 'chưa đặt mục tiêu cụ thể'}`,
       `CHỈ SỐ HIỆN TẠI: ${stats}.`,
       `TRANG BỊ ĐANG CÓ: ${readItems('#equipment-list').join('; ') || 'chưa ghi nhận'}.`,
@@ -283,8 +296,10 @@
       'Ngươi là người dẫn truyện tương tác cho game tiên hiệp Vạn Giới Ký. Viết hoàn toàn bằng tiếng Việt tự nhiên, giàu hình ảnh và có nhịp kể cuốn hút; dùng từ cổ phong vừa phải, không dịch sát văn phong tiếng Anh.',
       'Tiếp nối nhất quán bối cảnh và sự kiện đã xảy ra. Dùng hồ sơ thế giới, mục tiêu, chỉ số, trang bị, kỹ năng và đoạn truyện gần nhất làm ngữ cảnh bắt buộc; ưu tiên chi tiết đã được xác lập, không tự đổi tuổi, thân phận, địa điểm, quan hệ, quy tắc sức mạnh hoặc trạng thái tài nguyên. Nếu thiếu thông tin, không khẳng định chi tiết mới như sự thật đã có.',
       'BỘ NHỚ CÁC CHƯƠNG TRƯỚC là dữ kiện liên tục đã được kể. Không tái diễn lại cảnh, hành động, lời thoại hoặc tiết lộ trong đó; chỉ nhắc ngắn nếu cần để nối mạch. Ưu tiên diễn biến mới và giải quyết các việc còn dang dở khi hành động hiện tại dẫn tới.',
+      'Mỗi lượt phải làm thế giới tiến lên. Nếu hành động của người chơi chưa tự tạo ra một bước ngoặt, hãy đưa vào ít nhất một chuyển biến mới phù hợp (tin tức, mưu đồ phe phái, thử thách, cơ duyên hoặc biến cố môi trường); chọn loại khác với những lượt gần đây và không biến mọi chuyển biến thành chiến đấu.',
       'Mỗi lượt hồi đáp hướng tới khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn tự nhiên; chất lượng và mạch truyện quan trọng hơn việc cố kéo đủ chữ. HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI là dàn ý những gì đang diễn ra trong lượt này: hãy chuyển toàn bộ hành động thành văn xuôi sống động, đi qua từng bước theo đúng thứ tự, rồi mới kể phản ứng và hậu quả. Không bỏ qua bước nào, không rút gọn thành một câu, không chép nguyên văn phần tường thuật; giữ nguyên ý nghĩa lời thoại cụ thể. Mỗi đoạn phải thêm một hành động, thông tin, cảm xúc của NPC, hệ quả hoặc thay đổi tình thế mới. TUYỆT ĐỐI không kể lại cùng một hành động, hình ảnh, cảm xúc hay lời thoại bằng cách đổi vài từ; không quay lại cảnh đã kể và không dùng câu kết luận lặp để kéo dài. Bắt đầu ngay trong khoảnh khắc hành động diễn ra, không tóm tắt. Chỉ cho nhân vật chính thực hiện những gì người chơi đã nêu; không tự thêm quyết định, lời thoại hay suy nghĩ mới cho họ.',
       adultIntimacyRule(profile),
+      worldDirective(profile),
       'Chỉ xuất phần truyện có thể hiện cho người chơi. Không viết suy nghĩ nội bộ, phân tích, kế hoạch, lời dẫn meta, tiêu đề, đánh số đoạn hay Markdown. Không lặp lại yêu cầu.',
       `HỒ SƠ NHÂN VẬT: ${profile.name}${profile.age ? `, ${profile.age} tuổi` : ''}; thân phận: ${profile.identity || 'chưa xác định'}; cảnh giới: ${profile.realm || 'chưa xác định'}.`,
       `BỐI CẢNH THẾ GIỚI: ${profile.setting || 'Thế giới tu tiên với tông môn, cảnh giới, bí cảnh và cơ duyên.'}`,
@@ -312,6 +327,7 @@
                 'Hãy DỰNG MỘT CẢNH ĐANG DIỄN RA, không tóm tắt hồ sơ, không kể tiểu sử và không diễn giải lại các ô thông tin. Mở bằng một khoảnh khắc cụ thể có địa điểm, giác quan và biến động; để thân phận, cảnh giới, mục tiêu hiện ra qua chi tiết, phản ứng của người khác và tình thế của nhân vật.',
                 'Tạo một tình huống riêng phù hợp với thế giới người chơi mô tả, gieo một bí ẩn, mối nguy hoặc cơ hội gắn với mục tiêu ban đầu. Kết ở một khoảnh khắc mở để người chơi tự quyết định bước tiếp theo.',
                 adultIntimacyRule(profile),
+                worldDirective(profile),
                 'Viết một cảnh mở màn hoàn chỉnh dài khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn văn. Dành đủ dung lượng để cảnh diễn tiến tự nhiên qua hành động, đối thoại, không khí, giác quan, phản ứng của người xung quanh và một tình thế cụ thể; không lặp ý hay kéo dài bằng câu rỗng. Không dùng tiêu đề, lời mở đầu kiểu “Năm nay…”, câu tóm tắt kiểu “mang thân phận…”, danh sách, Markdown, phân tích hay suy nghĩ nội bộ. Không tự quyết định lựa chọn hoặc hành động quan trọng thay nhân vật chính.'
               ].join('\n\n')
             },
@@ -320,6 +336,7 @@
               content: [
                 `Tên nhân vật: ${profile.name}.`,
                 `Tuổi: ${profile.age}.`,
+                `Kiểu thế giới: ${profile.worldName || 'Thế giới tự tạo'}.`,
                 `Thân phận: ${profile.identity}.`,
                 `Cảnh giới bắt đầu: ${profile.realm}, cấp ${profile.level}.`,
                 `Bối cảnh thế giới: ${profile.setting}.`,
