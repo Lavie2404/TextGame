@@ -91,7 +91,12 @@
           <section class="composer panel">
             <div class="composer-top"><button class="add-action active" data-type="narration"><b>＋</b> Tường thuật</button><button class="add-action" data-type="dialogue"><b>＋</b> Đối thoại</button></div>
             <div class="inputs" id="inputs"></div>
-            <div class="composer-footer"><label class="event-check"><input type="checkbox" /> Chèn sự kiện / tình tiết bất ngờ</label><button class="execute" id="execute">Thực hiện <span>↵</span></button></div>
+            <div class="ai-panel">
+              <div class="ai-panel-heading"><span>NGƯỜI DẪN TRUYỆN AI</span><span class="ai-status" id="ai-status" role="status" aria-live="polite">Chưa kết nối Ollama</span></div>
+              <div class="ai-controls"><label for="ai-model">Model</label><input id="ai-model" value="richardyoung/qwen3-8b-abliterated:Q4_K_M" /><button type="button" id="ai-check">Kiểm tra Ollama</button></div>
+              <p class="ai-help" id="ai-help">Ollama phải đang chạy trên máy này. AI tạo tiếp diễn biến từ nội dung bạn nhập và câu chuyện hiện có.</p>
+            </div>
+            <div class="composer-footer"><label class="event-check"><input type="checkbox" id="surprise-event" /> Chèn sự kiện / tình tiết bất ngờ</label><div class="composer-buttons"><button class="execute" id="execute">Ghi thủ công</button><button class="execute ai-turn" type="button" id="ai-turn">AI hồi đáp <span>✦</span></button></div></div>
           </section>
         </section>
 
@@ -108,5 +113,6 @@
     <template id="narration-input"><section class="input-card narration-card"><button class="remove">×</button><label>Tường thuật</label><textarea placeholder="Miêu tả hành động, diễn biến của nhân vật..."></textarea></section></template>
     <template id="dialogue-input"><section class="input-card dialogue-card"><button class="remove">×</button><label>Đối thoại</label><div class="dialogue-meta"><button class="self">Nhân vật chính</button><input placeholder="Tìm/gõ tên NPC..." /></div><textarea placeholder="Nội dung lời nói..."></textarea></section></template>
     <script src="app.js"></script>
+    <script src="ai.js"></script>
   </body>
 </html>
