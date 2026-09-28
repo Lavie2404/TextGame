@@ -133,7 +133,7 @@
     return [
       'Ngươi là người dẫn truyện tương tác cho game tiên hiệp Vạn Giới Ký. Viết hoàn toàn bằng tiếng Việt tự nhiên, giàu hình ảnh và có nhịp kể cuốn hút; dùng từ cổ phong vừa phải, không dịch sát văn phong tiếng Anh.',
       'Tiếp nối nhất quán bối cảnh và sự kiện đã xảy ra. Dùng hồ sơ thế giới, mục tiêu, chỉ số, trang bị, kỹ năng và đoạn truyện gần nhất làm ngữ cảnh bắt buộc; ưu tiên chi tiết đã được xác lập, không tự đổi tuổi, thân phận, địa điểm, quan hệ, quy tắc sức mạnh hoặc trạng thái tài nguyên. Nếu thiếu thông tin, không khẳng định chi tiết mới như sự thật đã có.',
-      'Mỗi lượt hồi đáp là một phần truyện dài khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn tự nhiên. Phát triển hậu quả trực tiếp, phản ứng của NPC và thế giới, không khí, giác quan, đối thoại và diễn biến hợp lý; cụ thể, giàu chi tiết nhưng không lặp ý hay kéo dài bằng câu rỗng. Mở ngay tại hành động người chơi vừa chọn, không tóm tắt hoặc nhắc lại hành động. Không tự quyết định hành động, suy nghĩ hay lời thoại mới của nhân vật chính thay người chơi.',
+      'Mỗi lượt hồi đáp là một phần truyện dài khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn tự nhiên. HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI là dàn ý những gì đang diễn ra trong lượt này: hãy chuyển toàn bộ hành động thành văn xuôi sống động, đi qua từng bước theo đúng thứ tự, rồi mới kể phản ứng và hậu quả. Không bỏ qua bước nào, không rút gọn thành một câu, không chép nguyên văn phần tường thuật; giữ nguyên ý nghĩa lời thoại cụ thể. Phát triển thêm không khí, giác quan, phản ứng của NPC và thế giới cùng hệ quả hợp lý; giàu chi tiết nhưng không lặp ý hoặc kéo dài bằng câu rỗng. Bắt đầu ngay trong khoảnh khắc hành động diễn ra, không tóm tắt. Chỉ cho nhân vật chính thực hiện những gì người chơi đã nêu; không tự thêm quyết định, lời thoại hay suy nghĩ mới cho họ.',
       adultIntimacyRule(profile),
       'Chỉ xuất phần truyện có thể hiện cho người chơi. Không viết suy nghĩ nội bộ, phân tích, kế hoạch, lời dẫn meta, tiêu đề, đánh số đoạn hay Markdown. Không lặp lại yêu cầu.',
       `HỒ SƠ NHÂN VẬT: ${profile.name}${profile.age ? `, ${profile.age} tuổi` : ''}; thân phận: ${profile.identity || 'chưa xác định'}; cảnh giới: ${profile.realm || 'chưa xác định'}.`,
@@ -234,7 +234,7 @@
     turnButton.disabled = true;
     checkButton.disabled = true;
     modelInput.disabled = true;
-    turnButton.dataset.originalText = turnButton.textContent;
+    turnButton.dataset.originalText = 'Thực hiện';
     turnButton.textContent = 'Đang chờ AI…';
     setStatus('writing');
     help.textContent = 'Model đang viết phần truyện dài khoảng 1.500–2.000 từ; có thể mất vài phút, nhất là lần gọi đầu.';
@@ -260,8 +260,6 @@
       const answer = data.message?.content?.trim();
       if (!answer) throw new Error('Model không trả về phần truyện.');
 
-      const name = profile.name;
-      addParagraph(`${name}: ${action}`, 'narration player-action');
       answer.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean).forEach(part => addParagraph(part));
       inputs.innerHTML = '';
       document.querySelector('#surprise-event').checked = false;
@@ -276,7 +274,7 @@
       turnButton.disabled = false;
       checkButton.disabled = false;
       modelInput.disabled = false;
-      turnButton.innerHTML = `${turnButton.dataset.originalText || 'AI hồi đáp'} <span>✦</span>`;
+      turnButton.innerHTML = `${turnButton.dataset.originalText || 'Thực hiện'} <span>✦</span>`;
     }
   }
 
