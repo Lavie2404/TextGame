@@ -26,8 +26,7 @@ renderRealmPanels();renderItems();addInput('narration');
 document.querySelector('#origin-form').addEventListener('submit',async event=>{
   event.preventDefault();
   const name=document.querySelector('#origin-name').value.trim(),age=document.querySelector('#origin-age').value,identity=document.querySelector('#origin-identity').value.trim(),level=+originRealmInput.value,realm=getRealmForLevel(level),setting=document.querySelector('#origin-setting').value.trim(),goal=document.querySelector('#origin-goal').value.trim(),allowNsfw=document.querySelector('#allow-nsfw').checked,worldName=setting.split(/[\n;.!?]/)[0].trim().slice(0,36)||'Thế giới tự tạo';
-  if(!realm){originRealmInput.setCustomValidity('Cấp độ này chưa có cảnh giới tương ứng. Mỗi cảnh giới gồm 10 cấp.');originRealmInput.reportValidity();return}
-  originRealmInput.setCustomValidity('');
+  if(!realm){const startStatus=document.querySelector('#origin-ai-status');startStatus.textContent='Cấp độ này chưa có cảnh giới tương ứng. Mỗi cảnh giới gồm 10 cấp; hãy thêm cảnh giới phù hợp rồi thử lại.';startStatus.dataset.state='error';originRealmInput.focus();return}
   const startButton=event.currentTarget.querySelector('.begin-game'),startStatus=document.querySelector('#origin-ai-status'),buttonLabel=startButton.innerHTML;
   startButton.disabled=true;startButton.textContent='Đang viết mở đầu…';startStatus.textContent='Đang gửi hồ sơ và bối cảnh tới Ollama trên máy này.';startStatus.dataset.state='busy';
   try{
