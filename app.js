@@ -37,7 +37,7 @@ document.querySelector('#origin-form').addEventListener('submit',async event=>{
     story.replaceChildren();
     const chapterLabel=document.createElement('div');chapterLabel.className='chapter-label';
     const leftRule=document.createElement('span'),rightRule=document.createElement('span');chapterLabel.append(leftRule,document.createTextNode('Khai mở thiên mệnh'),rightRule);story.append(chapterLabel);
-    opening.split(/\n\s*\n/).map(part=>part.trim()).filter(Boolean).forEach((part,index)=>{const paragraph=document.createElement('p');paragraph.className=index===0?'narration lead':'narration';paragraph.textContent=part;story.append(paragraph)});
+    if(typeof window.renderNarrativeWithDialogue==='function')window.renderNarrativeWithDialogue(opening,name);else opening.split(/\n\s*\n/).map((part,index)=>{const paragraph=document.createElement('p');paragraph.className=index===0?'narration lead':'narration';paragraph.textContent=part;story.append(paragraph)});
     startStatus.textContent='Mở đầu đã được AI viết từ hồ sơ nhân vật và bối cảnh.';startStatus.dataset.state='ready';document.querySelector('#origin-screen').classList.add('done');document.body.classList.remove('origin-active');
   }catch(error){startStatus.textContent=`Chưa bắt đầu được: ${error.message||'không nhận được hồi đáp từ Ollama.'}`;startStatus.dataset.state='error'}
   finally{startButton.disabled=false;startButton.innerHTML=buttonLabel}

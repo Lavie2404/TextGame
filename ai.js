@@ -258,6 +258,45 @@
     story.append(paragraph);
   }
 
+  function appendNarrationWithDialogue(text, playerName) {
+    const pattern = /<dialogue\s+speaker\s*=\s*(["'])(.*?)\1\s*>([\s\S]*?)<\/dialogue\s*>/gi;
+    let cursor = 0;
+    let match;
+    let foundDialogue = false;
+    while ((match = pattern.exec(text))) {
+      foundDialogue = true;
+      const narration = text.slice(cursor, match.index).replace(/<\/?dialogue\b[^>]*>/gi, '').trim();
+      if (narration) addParagraph(narration);
+      const speaker = match[2].trim() || 'Không rõ';
+      const spokenText = match[3].replace(/<\/?dialogue\b[^>]*>/gi, '').trim();
+      if (spokenText) {
+        const entry = document.createElement('div');
+        entry.className = `story-entry ${speaker === playerName ? 'player' : 'npc'}`;
+        const avatar = document.createElement('div');
+        avatar.className = 'avatar';
+        avatar.textContent = [...speaker][0] || '•';
+        const body = document.createElement('div');
+        const name = document.createElement('div');
+        name.className = 'speaker';
+        name.textContent = speaker;
+        const dialogue = document.createElement('dialogue');
+        dialogue.textContent = spokenText;
+        body.append(name, dialogue);
+        entry.append(avatar, body);
+        story.append(entry);
+      }
+      cursor = pattern.lastIndex;
+    }
+    const trailing = text.slice(cursor).replace(/<\/?dialogue\b[^>]*>/gi, '').trim();
+    if (trailing) addParagraph(trailing);
+    if (!foundDialogue) addParagraph(text.replace(/<\/?dialogue\b[^>]*>/gi, '').trim());
+  }
+
+  window.renderNarrativeWithDialogue = (text, playerName) => {
+    text.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean)
+      .forEach(part => appendNarrationWithDialogue(part, playerName));
+  };
+
   function textNgrams(text) {
     const words = text.toLocaleLowerCase('vi').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
       .match(/[a-z0-9]+/g) || [];
@@ -291,6 +330,7 @@
       'BỘ NHỚ CÁC CHƯƠNG TRƯỚC là dữ kiện liên tục đã được kể. Không tái diễn lại cảnh, hành động, lời thoại hoặc tiết lộ trong đó; chỉ nhắc ngắn nếu cần để nối mạch. Ưu tiên diễn biến mới và giải quyết các việc còn dang dở khi hành động hiện tại dẫn tới.',
       'Mỗi lượt phải làm thế giới tiến lên. Nếu hành động của người chơi chưa tự tạo ra một bước ngoặt, hãy đưa vào ít nhất một chuyển biến mới phù hợp (tin tức, mưu đồ phe phái, thử thách, cơ duyên hoặc biến cố môi trường); chọn loại khác với những lượt gần đây và không biến mọi chuyển biến thành chiến đấu.',
       'Mỗi lượt hồi đáp hướng tới khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn tự nhiên; chất lượng và mạch truyện quan trọng hơn việc cố kéo đủ chữ. HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI là dàn ý những gì đang diễn ra trong lượt này: hãy chuyển toàn bộ hành động thành văn xuôi sống động, đi qua từng bước theo đúng thứ tự, rồi mới kể phản ứng và hậu quả. Không bỏ qua bước nào, không rút gọn thành một câu, không chép nguyên văn phần tường thuật; giữ nguyên ý nghĩa lời thoại cụ thể. Mỗi đoạn phải thêm một hành động, thông tin, cảm xúc của NPC, hệ quả hoặc thay đổi tình thế mới. TUYỆT ĐỐI không kể lại cùng một hành động, hình ảnh, cảm xúc hay lời thoại bằng cách đổi vài từ; không quay lại cảnh đã kể và không dùng câu kết luận lặp để kéo dài. Bắt đầu ngay trong khoảnh khắc hành động diễn ra, không tóm tắt. Chỉ cho nhân vật chính thực hiện những gì người chơi đã nêu; không tự thêm quyết định, lời thoại hay suy nghĩ mới cho họ.',
+      'QUY CÁCH ĐỊNH DẠNG LỜI THOẠI (BẮT BUỘC): Mọi câu nhân vật thực sự nói ra, gồm lời của nhân vật chính lẫn NPC, phải được bọc đúng dạng <dialogue speaker="Tên nhân vật">Lời nói</dialogue>. Giữ nguyên ý và câu chữ lời người chơi đã nhập khi chuyển thành lời thoại của nhân vật chính. Không để lời nói trong dấu ngoặc kép ở ngoài thẻ; không bọc lời tường thuật, suy nghĩ, miêu tả hay tiếng động không phải lời nói trong thẻ. Phần kể chuyện luôn nằm ngoài thẻ. Mỗi lượt nói của một người là một thẻ riêng và speaker phải ghi đúng tên người nói.',
       adultIntimacyRule(profile),
       worldDirective(profile),
       'Chỉ xuất phần truyện có thể hiện cho người chơi. Không viết suy nghĩ nội bộ, phân tích, kế hoạch, lời dẫn meta, tiêu đề, đánh số đoạn hay Markdown. Không lặp lại yêu cầu.',
@@ -321,6 +361,7 @@
                 'Tạo một tình huống riêng phù hợp với thế giới người chơi mô tả, gieo một bí ẩn, mối nguy hoặc cơ hội gắn với mục tiêu ban đầu. Kết ở một khoảnh khắc mở để người chơi tự quyết định bước tiếp theo.',
                 adultIntimacyRule(profile),
                 worldDirective(profile),
+                'Mọi câu thoại trong cảnh mở đầu cũng phải bọc trong <dialogue speaker="Tên nhân vật">Lời nói</dialogue>; lời kể và miêu tả để ngoài thẻ.',
                 'Viết một cảnh mở màn hoàn chỉnh dài khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn văn. Dành đủ dung lượng để cảnh diễn tiến tự nhiên qua hành động, đối thoại, không khí, giác quan, phản ứng của người xung quanh và một tình thế cụ thể; không lặp ý hay kéo dài bằng câu rỗng. Không dùng tiêu đề, lời mở đầu kiểu “Năm nay…”, câu tóm tắt kiểu “mang thân phận…”, danh sách, Markdown, phân tích hay suy nghĩ nội bộ. Không tự quyết định lựa chọn hoặc hành động quan trọng thay nhân vật chính.'
               ].join('\n\n')
             },
@@ -421,7 +462,8 @@
       const answer = removeRepeatedPassages(data.message?.content?.trim() || '');
       if (!answer) throw new Error('Model không trả về phần truyện.');
 
-      answer.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean).forEach(part => addParagraph(part));
+      answer.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean)
+        .forEach(part => appendNarrationWithDialogue(part, profile.name));
       const chapterClosed = await recordTurn(action, answer, model);
       inputs.innerHTML = '';
       document.querySelector('#surprise-event').checked = false;
