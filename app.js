@@ -27,14 +27,14 @@ document.querySelector('#origin-realms').addEventListener('click',event=>{const 
 renderRealmPanels();renderItems();addInput('narration');
 document.querySelector('#origin-form').addEventListener('submit',async event=>{
   event.preventDefault();
-  const name=document.querySelector('#origin-name').value.trim(),age=document.querySelector('#origin-age').value,identity=document.querySelector('#origin-identity').value.trim(),level=+originRealmInput.value,realm=getRealmForLevel(level),setting=document.querySelector('#origin-setting').value.trim(),goal=document.querySelector('#origin-goal').value.trim();
+  const name=document.querySelector('#origin-name').value.trim(),age=document.querySelector('#origin-age').value,identity=document.querySelector('#origin-identity').value.trim(),level=+originRealmInput.value,realm=getRealmForLevel(level),setting=document.querySelector('#origin-setting').value.trim(),goal=document.querySelector('#origin-goal').value.trim(),allowNsfw=document.querySelector('#allow-nsfw').checked;
   if(!realm){originRealmInput.setCustomValidity('Cấp độ này chưa có cảnh giới tương ứng. Mỗi cảnh giới gồm 10 cấp.');originRealmInput.reportValidity();return}
   originRealmInput.setCustomValidity('');
   const startButton=event.currentTarget.querySelector('.begin-game'),startStatus=document.querySelector('#origin-ai-status'),buttonLabel=startButton.innerHTML;
   startButton.disabled=true;startButton.textContent='Đang viết mở đầu…';startStatus.textContent='Đang gửi hồ sơ và bối cảnh tới Ollama trên máy này.';startStatus.dataset.state='busy';
   try{
     if(typeof window.generateOpeningText!=='function')throw new Error('Không tải được mô-đun AI. Hãy tải lại trang.');
-    const opening=await window.generateOpeningText({name,age,identity,level,realm,setting,goal});
+    const opening=await window.generateOpeningText({name,age,identity,level,realm,setting,goal,allowNsfw});
     renderRealmPanels(realm,level);document.querySelector('#player-name').textContent=name;document.querySelector('#player-realm').textContent=`${realm} · Cấp ${level}`;document.querySelector('#custom-name').value=name;document.querySelector('#custom-level').value=level;document.querySelector('#custom-realm').value=realm;document.querySelector('.chapter strong').textContent=identity;document.querySelector('.quest-card h3').textContent=goal||'Bắt đầu hành trình';
     story.replaceChildren();
     const chapterLabel=document.createElement('div');chapterLabel.className='chapter-label';
