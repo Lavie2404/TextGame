@@ -1,11 +1,15 @@
 const equipment=[['Thanh Phong Kiếm','Huyền phẩm','⚔'],['Hộ Tâm Giáp','Hoàng phẩm','♢']];
 const skills=[['Ngự Phong Quyết','Huyền phẩm','〽'],['Tụ Khí Thuật','Phàm phẩm','☯']];
 const rarity={ 'Phàm phẩm':0,'Hoàng phẩm':1,'Huyền phẩm':2,'Địa phẩm':3,'Thiên phẩm':4,'Tiên phẩm':5 };
+let inventoryCoins=0;
+function salePrice(grade){return [10,30,100,300,1000,3000][rarity[grade]]||10}
 const inputArea=document.querySelector('#inputs'),story=document.querySelector('#story');
 function itemHTML([name,grade,icon,active=true],index,type){
   const action=type==='equipment'?(active?'Tháo':'Mặc'):(active?'Tắt':'Bật');
   const state=type==='equipment'?(active?'Đang mặc':'Đã tháo'):(active?'Đang dùng':'Đã tắt');
-  return `<div class="item${active?'':' item-inactive'}" data-active="${active}"><span class="item-icon">${escapeHtml(icon)}</span><span class="item-details"><b>${escapeHtml(name)}</b><small class="item-grade rarity-${rarity[grade]}">${escapeHtml(grade)}</small><small class="item-state">${state}</small></span><button type="button" class="item-toggle" data-item-type="${type}" data-item-index="${index}" aria-label="${action} ${escapeHtml(name)}" aria-pressed="${active}">${action}</button></div>`;
+  const extraButton=(operation,label)=>`<button type="button" class="bag-action" data-item-type="${type}" data-item-index="${index}" data-operation="${operation}" aria-label="${label} ${escapeHtml(name)}">${label}</button>`;
+  const extra=active?'':type==='equipment'?extraButton('sell',`Bán · ${salePrice(grade)} đồng`)+extraButton('discard','Vứt bỏ'):extraButton('forget','Quên');
+  return `<div class="item${active?'':' item-inactive'}" data-active="${active}"><span class="item-icon">${escapeHtml(icon)}</span><span class="item-details"><b>${escapeHtml(name)}</b><small class="item-grade rarity-${rarity[grade]}">${escapeHtml(grade)}</small><small class="item-state">${state}</small></span><span class="item-actions"><button type="button" class="item-toggle" data-item-type="${type}" data-item-index="${index}" aria-label="${action} ${escapeHtml(name)}" aria-pressed="${active}">${action}</button>${extra}</span></div>`;
 }
 function renderItems(){
   const bag=[];
@@ -16,7 +20,25 @@ function renderItems(){
   }
   document.querySelector('#bag-list').innerHTML=bag.join('')||'<p class="inventory-empty">Túi đồ trống. Trang bị đã tháo và kỹ năng đã tắt sẽ nằm ở đây.</p>';
   document.querySelector('#bag-count').textContent=bag.length;
+  document.querySelector('#inventory-coins').textContent=inventoryCoins.toLocaleString('vi-VN');
 }
+document.querySelector('#bag-list').addEventListener('click',event=>{
+  const button=event.target.closest('.bag-action');
+  if(!button)return;
+  const {itemType,operation}=button.dataset;
+  const list=itemType==='equipment'?equipment:itemType==='skill'?skills:null;
+  const index=Number(button.dataset.itemIndex),item=list?.[index];
+  if(!Number.isInteger(index)||!item||item[3]!==false)return;
+  if(!(itemType==='equipment'&&['sell','discard'].includes(operation))&&!(itemType==='skill'&&operation==='forget'))return;
+  const amount=operation==='sell'?salePrice(item[1]):0;
+  inventoryCoins+=amount;
+  list.splice(index,1);
+  renderItems();
+  const message=operation==='sell'?`Đã bán ${item[0]}, nhận ${amount} đồng.`:operation==='discard'?`Đã vứt bỏ ${item[0]}.`:`Đã quên kỹ năng ${item[0]}.`;
+  document.querySelector('#bag-status').textContent=message;
+  const next=document.querySelector('#bag-list .item-toggle')||document.querySelector('#bag-status');
+  next.focus();
+});
 for(const selector of ['#equipment-list','#skills-list','#bag-list']){
   document.querySelector(selector).addEventListener('click',event=>{
     const button=event.target.closest('.item-toggle');

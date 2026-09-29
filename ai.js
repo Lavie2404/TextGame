@@ -217,6 +217,8 @@
       `TRANG BỊ ĐANG MẶC: ${readItems('#equipment-list').join('; ') || 'không có'}.`,
       `KỸ NĂNG ĐANG DÙNG: ${readItems('#skills-list').join('; ') || 'không có'}.`,
       `TÚI ĐỒ (chưa sử dụng): ${readItems('#bag-list').join('; ') || 'trống'}.`,
+      `TIỀN HIỆN CÓ: ${document.querySelector('#inventory-coins')?.textContent || '0'} đồng.`,
+      'Danh sách trang bị, kỹ năng và túi đồ hiện tại là nguồn chính xác về sở hữu. Không sử dụng lại món đã bán, vứt bỏ hoặc kỹ năng đã quên chỉ vì chúng xuất hiện trong truyện trước đó.',
       'Chỉ sử dụng trang bị đang mặc và kỹ năng đang dùng. Trang bị đã tháo và kỹ năng đã tắt vẫn được sở hữu nhưng không có hiệu lực; không tự mặc lại hay bật lại thay người chơi.',
       `CHƯƠNG ĐANG KỂ: ${document.querySelector('.chapter span')?.textContent?.trim() || 'CHƯƠNG 01'}.`,
       `MỤC TIÊU HIỆN TẠI: ${document.querySelector('.quest-card h3')?.textContent?.trim() || profile.goal || 'chưa rõ'} — ${document.querySelector('.quest-card p')?.textContent?.trim() || ''}`
