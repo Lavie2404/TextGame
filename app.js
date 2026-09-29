@@ -21,6 +21,7 @@ function renderItems(){
   document.querySelector('#bag-list').innerHTML=bag.join('')||'<p class="inventory-empty">Túi đồ trống. Trang bị đã tháo và kỹ năng đã tắt sẽ nằm ở đây.</p>';
   document.querySelector('#bag-count').textContent=bag.length;
   document.querySelector('#inventory-coins').textContent=inventoryCoins.toLocaleString('vi-VN');
+  document.dispatchEvent(new Event('inventory-changed'));
 }
 document.querySelector('#bag-list').addEventListener('click',event=>{
   const button=event.target.closest('.bag-action');
