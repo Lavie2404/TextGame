@@ -2,14 +2,13 @@ const equipment=[['Thanh Phong Kiếm','Huyền phẩm','⚔',true,'weapon'],['H
 const skills=[['Ngự Phong Quyết','Huyền phẩm','〽',true,'speed'],['Tụ Khí Thuật','Phàm phẩm','☯',true,'righteous']];
 const rarity={ 'Phàm phẩm':0,'Hoàng phẩm':1,'Huyền phẩm':2,'Địa phẩm':3,'Thiên phẩm':4,'Tiên phẩm':5 };
 let inventoryCoins=0;
-function salePrice(grade,kind='weapon'){return ([10,30,100,300,1000,3000][rarity[grade]]||10)*(itemPriceWeights[kind]||1)}
 const inputArea=document.querySelector('#inputs'),story=document.querySelector('#story');
-function itemHTML([name,grade,icon,active=true,kind],index,type){
+function itemHTML([name,grade,icon,active=true,kind,school,level],index,type){
   const action=type==='equipment'?(active?'Tháo':'Mặc'):(active?'Tắt':'Bật');
   const state=type==='equipment'?(active?'Đang mặc':'Đã tháo'):(active?'Đang dùng':'Đã tắt');
   const extraButton=(operation,label)=>`<button type="button" class="bag-action" data-item-type="${type}" data-item-index="${index}" data-operation="${operation}" aria-label="${label} ${escapeHtml(name)}">${label}</button>`;
-  const extra=active?'':type==='equipment'?extraButton('sell',`Bán · ${salePrice(grade,kind)} đồng`)+extraButton('discard','Vứt bỏ'):extraButton('forget','Quên');
-  return `<div class="item${active?'':' item-inactive'}" data-active="${active}"><span class="item-icon">${escapeHtml(icon)}</span><span class="item-details"><b>${escapeHtml(name)}</b><small class="item-grade rarity-${rarity[grade]}">${escapeHtml(grade)}</small><small class="item-state">${state}</small><small class="item-effect">${escapeHtml(itemDescription([name,grade,icon,active,kind]))}</small></span><span class="item-actions"><button type="button" class="item-toggle" data-item-type="${type}" data-item-index="${index}" aria-label="${action} ${escapeHtml(name)}" aria-pressed="${active}">${action}</button>${active&&(kind?.startsWith("burst")||kind==="escape")?`<button type="button" class="burst-trigger" data-skill-index="${index}">Kích hoạt · 30 linh lực</button>`:""}${extra}</span></div>`;
+  const extra=active?'':type==='equipment'?extraButton('sell',`Bán · ${itemPrice([name,grade,icon,active,kind,school,level]).toLocaleString('vi-VN')} đồng`)+extraButton('discard','Vứt bỏ'):extraButton('forget','Quên');
+  return `<div class="item${active?'':' item-inactive'}" data-active="${active}"><span class="item-icon">${escapeHtml(icon)}</span><span class="item-details"><b>${escapeHtml(name)}</b><small class="item-grade rarity-${rarity[grade]}">${escapeHtml(grade)} · Cấp ${itemLevel([name,grade,icon,active,kind,school,level])}</small><small class="item-state">${state}</small><small class="item-effect">${escapeHtml(itemDescription([name,grade,icon,active,kind,school,level]))}</small></span><span class="item-actions"><button type="button" class="item-toggle" data-item-type="${type}" data-item-index="${index}" aria-label="${action} ${escapeHtml(name)}" aria-pressed="${active}">${action}</button>${active&&(kind?.startsWith("burst")||kind==="escape")?`<button type="button" class="burst-trigger" data-skill-index="${index}">Kích hoạt bạo phát</button>`:""}${extra}</span></div>`;
 }
 function renderItems(){
   const bag=[];
@@ -33,7 +32,7 @@ document.querySelector('#bag-list').addEventListener('click',event=>{
   const index=Number(button.dataset.itemIndex),item=list?.[index];
   if(!Number.isInteger(index)||!item||item[3]!==false)return;
   if(!(itemType==='equipment'&&['sell','discard'].includes(operation))&&!(itemType==='skill'&&operation==='forget'))return;
-  const amount=operation==='sell'?salePrice(item[1],item[4]):0;
+  const amount=operation==='sell'?itemPrice(item):0;
   inventoryCoins+=amount;
   list.splice(index,1);
   renderItems();
@@ -66,22 +65,42 @@ document.querySelector('#skills-list').addEventListener('click',event=>{
   if(!item||item[3]===false||!(item[4].startsWith('burst')||item[4]==='escape'))return;
   const status=document.querySelector('#bag-status');
   if(pendingBurst){status.textContent='Đã chuẩn bị một bạo phát cho lượt kế tiếp.';return}
-  if(baseStats.spirit<30){status.textContent='Cần ít nhất 30 linh lực gốc để kích hoạt.';return}
-  baseStats.spirit-=30;pendingBurst={kind:item[4],name:item[0],percent:50+itemRank(item)*10};
-  renderItems();status.textContent=`Đã kích hoạt ${item[0]} cho lượt kế tiếp, trả 30 linh lực. Nếu AI lỗi, hiệu lực vẫn được giữ.`;
+  if(burstFatigue){status.textContent=`Đang chịu ${burstFatigue.cost} sau ${burstFatigue.name}; hết lượt này mới bạo phát được.`;return}
+  const refusal=payBurstActivation(item);if(refusal){status.textContent=refusal;return}
+  pendingBurst={kind:item[4],name:item[0],bonus:burstBonus(item)};
+  renderItems();status.textContent=`Đã kích hoạt ${item[0]} cho lượt kế tiếp. ${burstCostText(item[4])}. Nếu AI lỗi, hiệu lực vẫn được giữ.`;
+});
+document.querySelector('#consumable-list').addEventListener('click',event=>{
+  const button=event.target.closest('[data-use-potion]');if(!button||document.querySelector('#ai-turn').disabled)return;
+  const message=usePotion(button.dataset.usePotion);renderItems();document.querySelector('#bag-status').textContent=message;
 });
 function renderItemKinds(){
   const group=document.querySelector('#item-type').value;
   document.querySelector('#item-kind').innerHTML=Object.entries(itemKinds).filter(([,data])=>data[0]===group).map(([key,data])=>`<option value="${key}">${data[1]}</option>`).join('');
+  renderSchoolChoice();
 }
+function renderSchoolChoice(){document.querySelector('#item-school-label').hidden=document.querySelector('#item-kind').value!=='demonic'}
+document.querySelector('#item-school').innerHTML=Object.entries(demonicSchools).map(([key,data])=>`<option value="${key}">${data.label}</option>`).join('');
+document.querySelector('#item-kind').addEventListener('change',renderSchoolChoice);
 document.querySelector('#item-type').addEventListener('change',renderItemKinds);renderItemKinds();
+document.querySelector('#occult-panel').addEventListener('click',event=>{
+  if(document.querySelector('#ai-turn').disabled)return;
+  const purchase=event.target.closest('[data-buy-material]'),raise=event.target.closest('[data-raise]');
+  if(purchase){const key=purchase.dataset.buyMaterial,offer=materialOffers[key];if(!offer||inventoryCoins<offer[1])return;inventoryCoins-=offer[1];occultMaterials[key]++;renderItems();document.querySelector('#shop-status').textContent=`Đã mua ${offer[0]}.`}
+  if(raise){const message=raiseServant(raise.dataset.raise);renderItems();document.querySelector('#shop-status').textContent=message}
+});
+document.querySelector('#occult-panel').addEventListener('change',event=>{
+  if(document.querySelector('#ai-turn').disabled){renderOccultPanel();return}
+  if(event.target.id==='shadow-retreat')shadowRetreat=event.target.checked;
+  if(event.target.matches('[data-servant-job]')){const servant=servants.find(s=>s.id===Number(event.target.dataset.servantJob));if(servant&&['rest','work','gather'].includes(event.target.value))servant.job=event.target.value}
+});
 document.querySelectorAll('.add-action').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.add-action').forEach(x=>x.classList.remove('active'));btn.classList.add('active');addInput(btn.dataset.type)}));
 inputArea.addEventListener('click',e=>{if(e.target.matches('.remove'))e.target.closest('.input-card').remove()});
 function escapeHtml(str){const el=document.createElement('div');el.textContent=str;return el.innerHTML}
 const modal=document.querySelector('#modal');document.querySelector('#open-customize').onclick=()=>modal.classList.add('open');document.querySelector('#close-modal').onclick=()=>modal.classList.remove('open');modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});
 const settingsModal=document.querySelector('#settings-modal');document.querySelector('#open-settings').onclick=()=>settingsModal.classList.add('open');document.querySelector('#close-settings').onclick=()=>settingsModal.classList.remove('open');settingsModal.addEventListener('click',e=>{if(e.target===settingsModal)settingsModal.classList.remove('open')});
-document.querySelector('#save-custom').onclick=()=>{const name=document.querySelector('#custom-name').value.trim()||'Nhân vật vô danh',level=Math.max(1,+document.querySelector('#custom-level').value||1),realm=getRealmForLevel(level),xp=Math.max(0,Math.min(1000,+document.querySelector('#custom-xp').value||0));document.querySelector('#player-name').textContent=name;document.querySelector('#player-realm').textContent=`${realm||'Chưa có cảnh giới'} · Cấp ${level}`;document.querySelector('#xp-label').textContent=`${xp} / 1000`;document.querySelector('#xp-fill').style.width=`${xp/10}%`;renderRealmPanels(realm,level);modal.classList.remove('open')};
-document.querySelector('#create-item').onclick=()=>{const name=document.querySelector('#item-name').value.trim(),type=document.querySelector('#item-type').value,grade=document.querySelector('#item-rarity').value;if(!name)return;const list=type==='Trang bị'?equipment:skills;list.push([name,grade,type==='Trang bị'?'✦':'☯',false,document.querySelector('#item-kind').value]);renderItems();document.querySelector('#item-name').value=''};
+document.querySelector('#save-custom').onclick=()=>{const name=document.querySelector('#custom-name').value.trim()||'Nhân vật vô danh',level=Math.max(1,+document.querySelector('#custom-level').value||1),xp=Math.max(0,Math.min(xpToNextLevel(level),+document.querySelector('#custom-xp').value||0));document.querySelector('#player-name').textContent=name;renderProgress(level,xp);modal.classList.remove('open')};
+document.querySelector('#create-item').onclick=()=>{const name=document.querySelector('#item-name').value.trim(),type=document.querySelector('#item-type').value,grade=document.querySelector('#item-rarity').value;if(!name)return;const list=type==='Trang bị'?equipment:skills;list.push([name,grade,type==='Trang bị'?'✦':'☯',false,document.querySelector('#item-kind').value,document.querySelector('#item-school').value,playerLevel()]);renderItems();document.querySelector('#item-name').value=''};
 document.querySelector('#add-equipment').onclick=()=>modal.classList.add('open');document.querySelector('#add-skill').onclick=()=>modal.classList.add('open');
 const worldRealms=[];const originRealmInput=document.querySelector('#origin-realm');originRealmInput.type='number';originRealmInput.min='1';originRealmInput.placeholder='Ví dụ: 1';originRealmInput.closest('label').childNodes[0].textContent='Cấp độ hiện tại';
 document.querySelector('#custom-realm').outerHTML='<input id="custom-realm" readonly placeholder="Tự xác định theo cấp độ" />';
@@ -102,8 +121,8 @@ document.querySelector('#origin-form').addEventListener('submit',async event=>{
   try{
     if(typeof window.generateOpeningText!=='function')throw new Error('Không tải được mô-đun AI. Hãy tải lại trang.');
     const opening=await window.generateOpeningText({name,age,identity,level,realm,setting,goal,allowNsfw,worldName});
-    window.resetChapterMemory?.();
-    renderRealmPanels(realm,level);document.querySelector('#player-name').textContent=name;document.querySelector('#player-realm').textContent=`${realm} · Cấp ${level}`;document.querySelector('#custom-name').value=name;document.querySelector('#custom-level').value=level;document.querySelector('#custom-realm').value=realm;document.querySelector('.chapter strong').textContent=`${worldName} · ${identity}`;document.querySelector('.quest-card h3').textContent=goal||'Bắt đầu hành trình';
+    window.resetChapterMemory?.();resetNpcProfiles();[...equipment,...skills].forEach(item=>{item[6]??=level});baseStats=rollCharacterStats(level);pendingBurst=null;burstFatigue=null;chapterMindPercent=0;renderProgress(level,0);currentHealth=null;Object.keys(potions).forEach(key=>delete potions[key]);renderItems();
+    renderRealmPanels(realm,level);document.querySelector('#player-name').textContent=name;document.querySelector('#player-realm').textContent=`${realm} · Cấp ${level}`;document.querySelector('#custom-name').value=name;document.querySelector('#custom-level').value=level;document.querySelector('#custom-realm').value=realm;document.querySelector('.chapter strong').textContent=`${worldName} · ${identity}`;document.querySelector('.quest-card h3').textContent=goal||'Bắt đầu hành trình';window.rerollShopStock?.();
     story.replaceChildren();
     const chapterLabel=document.createElement('div');chapterLabel.className='chapter-label';
     const leftRule=document.createElement('span'),rightRule=document.createElement('span');chapterLabel.append(leftRule,document.createTextNode('Khai mở thiên mệnh'),rightRule);story.append(chapterLabel);

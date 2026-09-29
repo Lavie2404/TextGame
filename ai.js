@@ -8,7 +8,6 @@
   const story = document.querySelector('#story');
   const inputs = document.querySelector('#inputs');
   const CHAPTER_MEMORY_KEY = 'van-gioi-ky.chapter-memory.v1';
-  const TURNS_PER_CHAPTER = 4;
   const MAX_REMEMBERED_CHAPTERS = 5;
   const statusText = {
     idle: 'Chưa kết nối Ollama',
@@ -109,6 +108,38 @@
     return `${turn.narrative.slice(0, 2500)}\n[Đã lược bớt phần giữa; xem diễn biến cuối lượt bên dưới.]\n${turn.narrative.slice(-2500)}`;
   }
 
+  // Decides whether the closing chapter contained combat (which blocks end-of-chapter HP recovery).
+  // Falls back to a keyword check when Ollama is unavailable or answers badly.
+  const COMBAT_WORDS = /giao tranh|giao chiến|chiến đấu|đánh nhau|tấn công|chém|đâm|xuất chiêu|trúng chiêu|thọ thương|bị thương|hộc máu|phục kích|truy sát|ẩu đả|quyết đấu/iu;
+  async function detectChapterCombat(model, turns, summary) {
+    const source = turns.map((turn, index) => `LƯỢT ${index + 1}\nHÀNH ĐỘNG: ${turn.action}\nDIỄN BIẾN: ${chapterSourceForSummary(turn)}`).join('\n\n');
+    try {
+      const response = await fetchWithTimeout(`${OLLAMA_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: 'Ngươi phân loại một chương truyện. Trả về JSON {"combat": true|false}. combat là true chỉ khi nhân vật chính thực sự tham gia giao tranh, đánh nhau hoặc bị tấn công trong chương; tranh cãi, đe dọa hay chỉ nhắc tới trận đánh thì là false.' },
+            { role: 'user', content: `${summary ? `TÓM LƯỢC CHƯƠNG:\n${summary}\n\n` : ''}TƯ LIỆU CHƯƠNG:\n${source}` }
+          ],
+          format: { type: 'object', properties: { combat: { type: 'boolean' } }, required: ['combat'] },
+          think: false,
+          stream: false,
+          keep_alive: '10m',
+          options: { temperature: 0, num_predict: 20 }
+        })
+      }, 180000);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
+      const combat = JSON.parse(data.message?.content || '{}').combat;
+      if (typeof combat === 'boolean') return combat;
+    } catch (error) {
+      console.warn('Dùng từ khóa để xác định giao tranh trong chương.', error);
+    }
+    return COMBAT_WORDS.test(turns.map(turn => `${turn.action}\n${turn.narrative}`).join('\n'));
+  }
+
   async function closeCurrentChapter(model) {
     const closingChapter = { number: chapterState.chapterNumber, turns: chapterState.turns };
     const previousMemory = formatChapterMemory();
@@ -138,6 +169,9 @@
       console.warn('Dùng bản ghi rút gọn dự phòng cho chương.', error);
     }
 
+    const hadCombat = await detectChapterCombat(model, closingChapter.turns, summary);
+    awardChapterCultivation().forEach(appendTurnReport);
+    appendTurnReport(applyChapterRecovery(hadCombat));
     chapterState.memories.push({ number: closingChapter.number, summary: (summary || fallbackChapterSummary(closingChapter.turns)).slice(0, 4000) });
     chapterState.memories = chapterState.memories.slice(-MAX_REMEMBERED_CHAPTERS);
     chapterState.chapterNumber++;
@@ -205,8 +239,8 @@
   function getWorldContext(profile) {
     const readItems = selector => [...document.querySelectorAll(`${selector} .item`)]
       .map(item => `${item.querySelector('b')?.textContent || ''} (${item.querySelector('.item-grade')?.textContent || ''}; ${(item.querySelector('.item-state')?.textContent || 'đang dùng') + '; ' + (item.querySelector('.item-effect')?.textContent || '')})`).filter(Boolean);
-    const stats = ['#attack', '#defense', '#speed', '#spirit', '#health']
-      .map((selector, index) => `${['Công kích', 'Phòng ngự', 'Tốc độ', 'Linh lực', 'Máu'][index]}: ${document.querySelector(selector)?.textContent?.trim() || 'chưa rõ'}`)
+    const stats = Object.entries(CHARACTER_STAT_LABELS)
+      .map(([key, label]) => `${key === 'health' ? 'Máu (hiện tại / tối đa)' : label}: ${document.getElementById(key)?.textContent?.trim() || 'chưa rõ'}`)
       .join('; ');
     return [
       `HỒ SƠ: ${profile.name}; ${profile.age || 'tuổi chưa rõ'}; thân phận ${profile.identity || 'chưa rõ'}; cảnh giới ${profile.realm || 'chưa rõ'}.`,
@@ -218,9 +252,13 @@
       `KỸ NĂNG ĐANG DÙNG: ${readItems('#skills-list').join('; ') || 'không có'}.`,
       `TÚI ĐỒ (chưa sử dụng): ${readItems('#bag-list').join('; ') || 'trống'}.`,
       `TIỀN HIỆN CÓ: ${document.querySelector('#inventory-coins')?.textContent || '0'} đồng.`,
-      `NGUYÊN LIỆU HUYẾT CÔNG: ${cultivationBlood.animal} phần máu động vật, ${cultivationBlood.human} phần máu người. Đây là nguyên liệu riêng, không phải chỉ số Máu/sinh lực. Tâm pháp ma đạo hiện tại cần số phần máu bằng bậc phẩm chất mỗi lượt; có thể dùng một trong hai nguồn hoặc kết hợp. Thiếu nguyên liệu thì không tu luyện được, không nhận tu vi. Không dùng linh lực để thay điều kiện này.`,
-      `BẠO PHÁT LƯỢT NÀY: ${pendingBurst ? `${pendingBurst.name}: ${pendingBurst.kind}, +${pendingBurst.percent}%; đã trả 30 linh lực, chỉ có hiệu lực lượt này.` : 'Không kích hoạt. Không tự dùng công pháp trả giá.'}`,
-      'Chỉ số hiển thị đã cộng hiệu ứng trang bị và kỹ năng; không cộng hai lần. Công pháp trốn chạy chỉ hỗ trợ thoát thân khi được kích hoạt, không bảo đảm thành công. Mỗi lượt hoàn tất nhận 20 tu vi cơ bản, nhân hệ số tâm pháp đang dùng; riêng tâm pháp ma đạo thiếu nguyên liệu thì nhận 0 tu vi; hệ thống tự tính tu vi và chi phí, không tự bịa thay đổi số liệu.',
+      `NGUYÊN LIỆU HUYẾT CÔNG: ${cultivationBlood.animal} phần máu động vật, ${cultivationBlood.human} phần máu người. Chỉ nhánh Huyết công dùng máu; các nhánh ma đạo khác có điều kiện riêng ghi trên kỹ năng.`,
+      occultContext(),
+      npcProfilesContext(),
+      `BẠO PHÁT LƯỢT NÀY: ${pendingBurst ? `${pendingBurst.name}: ${burstEffectText(pendingBurst.bonus, pendingBurst.kind)}; chỉ có hiệu lực lượt này. ${burstCostText(pendingBurst.kind)}.` : 'Không kích hoạt. Không tự dùng công pháp bạo phát.'}`,
+      `DI CHỨNG BẠO PHÁT: ${burstFatigue ? `đang chịu ${burstFatigue.cost} sau ${burstFatigue.name}: ${CHARACTER_STAT_LABELS[burstFatigue.stat]} giảm ${FATIGUE_PERCENT}% (chỉ số hiển thị đã trừ), không thể bạo phát; hãy thể hiện di chứng này trong lượt.` : 'không.'}`,
+      `VẬT PHẨM: ${Object.entries(potions).filter(([, count]) => count > 0).map(([key, count]) => { const potion = potionFromKey(key); return `Bình máu ${potion[1]} cấp ${itemLevel(potion)} ×${count} (hồi ${potionHeal(potion)} máu)`; }).join('; ') || 'không có'}. Người chơi tự dùng vật phẩm bằng nút trong giao diện; không tự dùng thay.`,
+      'Chỉ số hiển thị đã cộng hiệu ứng trang bị và kỹ năng; không cộng hai lần. Công pháp trốn chạy chỉ hỗ trợ thoát thân khi được kích hoạt, không bảo đảm thành công. Tu vi được hệ thống cộng một lần khi hết chương: 2,5% tu vi cần để lên cấp cộng phần của tâm pháp đang dùng (ma đạo chỉ góp ở lượt đủ điều kiện); hệ thống tự tính tu vi và chi phí, không tự bịa thay đổi số liệu.',
       'Danh sách trang bị, kỹ năng và túi đồ hiện tại là nguồn chính xác về sở hữu. Không sử dụng lại món đã bán, vứt bỏ hoặc kỹ năng đã quên chỉ vì chúng xuất hiện trong truyện trước đó.',
       'Chỉ sử dụng trang bị đang mặc và kỹ năng đang dùng. Trang bị đã tháo và kỹ năng đã tắt vẫn được sở hữu nhưng không có hiệu lực; không tự mặc lại hay bật lại thay người chơi.',
       `CHƯƠNG ĐANG KỂ: ${document.querySelector('.chapter span')?.textContent?.trim() || 'CHƯƠNG 01'}.`,
@@ -310,9 +348,15 @@
       const spokenText = match[3].replace(/<\/?dialogue\b[^>]*>/gi, '').trim();
       if (spokenText) {
         const entry = document.createElement('div');
-        entry.className = `story-entry ${speaker === playerName ? 'player' : speaker === 'Chưa rõ người nói' ? 'unattributed' : 'npc'}`;
-        const avatar = document.createElement('div');
+        const role = speaker === playerName ? 'player' : speaker === 'Chưa rõ người nói' ? 'unattributed' : 'npc';
+        entry.className = `story-entry ${role}`;
+        const avatar = document.createElement(role === 'npc' ? 'button' : 'div');
         avatar.className = 'avatar';
+        if (role === 'npc') {
+          avatar.type = 'button';
+          avatar.setAttribute('aria-label', `Xem thông tin ${speaker}`);
+          avatar.title = `Xem thông tin ${speaker}`;
+        }
         avatar.textContent = [...speaker][0] || '•';
         const body = document.createElement('div');
         const name = document.createElement('div');
@@ -575,6 +619,50 @@
   }
 
   window.generateOpeningText = generateOpeningText;
+
+  // Builds one NPC profile from what the story has already shown; npc-profiles.js validates and caches it.
+  window.generateNpcProfile = async speaker => {
+    const model = modelInput.value.trim();
+    if (!model) throw new Error('Hãy nhập tên model Ollama trong Thiết lập.');
+    const profile = getProfile();
+    const realms = worldRealms.map((realm, index) => `${realm}: cấp ${index * 10 + 1}–${index * 10 + 10}`).join('; ') || 'chưa thiết lập';
+    const response = await fetchWithTimeout(`${OLLAMA_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'Ngươi lập hồ sơ nhân vật cho game truyện. Chỉ trả về JSON đúng lược đồ, viết tiếng Việt. Bám sát mọi dữ kiện truyện đã kể về nhân vật (tên, chức vụ, lời nói, hành động, quan hệ); phần truyện chưa nói thì suy ra hợp lý theo thế giới, thời kỳ và thân phận, không mâu thuẫn với truyện và với các hồ sơ đã lập.' },
+          { role: 'user', content: [
+            `THẾ GIỚI: ${profile.setting || profile.worldName}`,
+            `NHÂN VẬT CẦN LẬP HỒ SƠ: "${speaker}" (tên hiển thị trong truyện).`,
+            'fullName: họ và tên đầy đủ. Nếu truyện chỉ gọi bằng chức danh hoặc biệt danh, đặt họ tên hợp thời đại và giữ phần đã biết (ví dụ "Trưởng lão Từ" thì họ Từ).',
+            'courtesyName: tên tự, nếu thời đại/thân phận có dùng tên tự; nếu không thì ghi "Không có".',
+            'identity: thân phận, chức vụ, phe phái. appearance: ngoại hình, 1–2 câu. personality: tính cách, 1–2 câu.',
+            `level: 0 nếu là người thường chưa tu luyện; ngược lại từ 1 đến ${Math.max(worldRealms.length * 10, 1)}, tương xứng với thân phận và sức mạnh truyện đã thể hiện. Hệ thống cảnh giới: ${realms}. Nhân vật chính ${profile.name} đang ở ${profile.realm}. Chỉ số do hệ thống tự tính theo cấp độ, không cần ghi.`,
+            npcProfilesContext(),
+            `BỘ NHỚ CÁC CHƯƠNG TRƯỚC:\n${formatChapterMemory()}`,
+            `DIỄN BIẾN GẦN ĐÂY:\n${formatRecentStoryContext(4000)}`
+          ].join('\n\n') }
+        ],
+        format: NPC_PROFILE_SCHEMA,
+        think: false,
+        stream: false,
+        keep_alive: '10m',
+        options: { temperature: 0.4, top_p: 0.85, num_predict: 800 }
+      })
+    }, 180000);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
+    const content = data.message?.content || '';
+    try {
+      return JSON.parse(content);
+    } catch {
+      const json = content.match(/\{[\s\S]*\}/)?.[0];
+      if (!json) throw new Error('Model không trả về hồ sơ hợp lệ.');
+      return JSON.parse(json);
+    }
+  };
 
   async function playAI() {
     const action = getPlayerAction();
