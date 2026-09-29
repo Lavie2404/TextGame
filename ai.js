@@ -214,8 +214,9 @@
       `MÔ TẢ THẾ GIỚI VÀ MỐC THỜI GIAN: ${profile.setting || 'chưa thiết lập'}`,
       `MỤC TIÊU: ${profile.goal || 'chưa đặt mục tiêu cụ thể'}`,
       `CHỈ SỐ HIỆN TẠI: ${stats}.`,
-      `TRANG BỊ ĐANG CÓ: ${readItems('#equipment-list').join('; ') || 'chưa ghi nhận'}.`,
-      `KỸ NĂNG ĐANG CÓ: ${readItems('#skills-list').join('; ') || 'chưa ghi nhận'}.`,
+      `TRANG BỊ ĐANG MẶC: ${readItems('#equipment-list').join('; ') || 'không có'}.`,
+      `KỸ NĂNG ĐANG DÙNG: ${readItems('#skills-list').join('; ') || 'không có'}.`,
+      `TÚI ĐỒ (chưa sử dụng): ${readItems('#bag-list').join('; ') || 'trống'}.`,
       'Chỉ sử dụng trang bị đang mặc và kỹ năng đang dùng. Trang bị đã tháo và kỹ năng đã tắt vẫn được sở hữu nhưng không có hiệu lực; không tự mặc lại hay bật lại thay người chơi.',
       `CHƯƠNG ĐANG KỂ: ${document.querySelector('.chapter span')?.textContent?.trim() || 'CHƯƠNG 01'}.`,
       `MỤC TIÊU HIỆN TẠI: ${document.querySelector('.quest-card h3')?.textContent?.trim() || profile.goal || 'chưa rõ'} — ${document.querySelector('.quest-card p')?.textContent?.trim() || ''}`

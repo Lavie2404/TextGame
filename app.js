@@ -5,18 +5,31 @@ const inputArea=document.querySelector('#inputs'),story=document.querySelector('
 function itemHTML([name,grade,icon,active=true],index,type){
   const action=type==='equipment'?(active?'Tháo':'Mặc'):(active?'Tắt':'Bật');
   const state=type==='equipment'?(active?'Đang mặc':'Đã tháo'):(active?'Đang dùng':'Đã tắt');
-  return `<div class="item${active?'':' item-inactive'}" data-active="${active}"><span class="item-icon">${escapeHtml(icon)}</span><span class="item-details"><b>${escapeHtml(name)}</b><small class="item-grade rarity-${rarity[grade]}">${escapeHtml(grade)}</small><small class="item-state">${state}</small></span><button type="button" class="item-toggle" data-item-index="${index}" aria-label="${action} ${escapeHtml(name)}" aria-pressed="${active}">${action}</button></div>`;
+  return `<div class="item${active?'':' item-inactive'}" data-active="${active}"><span class="item-icon">${escapeHtml(icon)}</span><span class="item-details"><b>${escapeHtml(name)}</b><small class="item-grade rarity-${rarity[grade]}">${escapeHtml(grade)}</small><small class="item-state">${state}</small></span><button type="button" class="item-toggle" data-item-type="${type}" data-item-index="${index}" aria-label="${action} ${escapeHtml(name)}" aria-pressed="${active}">${action}</button></div>`;
 }
-function renderItems(){document.querySelector('#equipment-list').innerHTML=equipment.map((item,index)=>itemHTML(item,index,'equipment')).join('');document.querySelector('#skills-list').innerHTML=skills.map((item,index)=>itemHTML(item,index,'skill')).join('')}
-for(const [selector,list] of [['#equipment-list',equipment],['#skills-list',skills]]){
+function renderItems(){
+  const bag=[];
+  for(const [selector,list,type] of [['#equipment-list',equipment,'equipment'],['#skills-list',skills,'skill']]){
+    const active=[];
+    list.forEach((item,index)=>{(item[3]===false?bag:active).push(itemHTML(item,index,type))});
+    document.querySelector(selector).innerHTML=active.join('')||`<p class="inventory-empty">${type==='equipment'?'Chưa mặc trang bị nào.':'Chưa bật kỹ năng nào.'}</p>`;
+  }
+  document.querySelector('#bag-list').innerHTML=bag.join('')||'<p class="inventory-empty">Túi đồ trống. Trang bị đã tháo và kỹ năng đã tắt sẽ nằm ở đây.</p>';
+  document.querySelector('#bag-count').textContent=bag.length;
+}
+for(const selector of ['#equipment-list','#skills-list','#bag-list']){
   document.querySelector(selector).addEventListener('click',event=>{
     const button=event.target.closest('.item-toggle');
     if(!button)return;
+    const type=button.dataset.itemType;
+    const list=type==='equipment'?equipment:type==='skill'?skills:null;
+    if(!list)return;
     const index=Number(button.dataset.itemIndex),item=list[index];
     if(!item)return;
     item[3]=item[3]===false;
     renderItems();
-    document.querySelector(selector).querySelector(`[data-item-index="${index}"]`).focus();
+    const destination=item[3]?(type==='equipment'?'#equipment-list':'#skills-list'):'#bag-list';
+    document.querySelector(destination).querySelector(`[data-item-type="${type}"][data-item-index="${index}"]`).focus();
   });
 }
 function addInput(type){const template=document.querySelector(`#${type}-input`);const node=template.content.cloneNode(true);inputArea.append(node);inputArea.lastElementChild.querySelector('textarea').focus()}

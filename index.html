@@ -76,6 +76,7 @@
           </div>
           <div class="side-section"><div class="side-heading"><span>Trang bị</span><button id="add-equipment">+</button></div><div class="item-list" id="equipment-list"></div></div>
           <div class="side-section"><div class="side-heading"><span>Kỹ năng</span><button id="add-skill">+</button></div><div class="item-list" id="skills-list"></div></div>
+          <div class="side-section"><div class="side-heading"><span>Túi đồ</span><span id="bag-count" aria-label="Số món trong túi" aria-live="polite">0</span></div><div class="item-list" id="bag-list"></div></div>
         </aside>
 
         <section class="story-column">
@@ -106,8 +107,8 @@
     <div class="modal-backdrop" id="settings-modal"><section class="custom-modal settings-modal panel"><button class="close" id="close-settings">×</button><div class="modal-kicker">THIẾT LẬP</div><h2>Người dẫn truyện AI</h2><p class="modal-intro">Kết nối Ollama và chọn mô hình viết tiếp câu chuyện.</p><div class="ai-panel"><div class="ai-panel-heading"><span>NGƯỜI DẪN TRUYỆN AI</span><span class="ai-status" id="ai-status" role="status" aria-live="polite">Chưa kết nối Ollama</span></div><div class="ai-controls"><label for="ai-model">Model</label><input id="ai-model" value="richardyoung/qwen3-8b-abliterated:Q4_K_M" /><button type="button" id="ai-check">Kiểm tra Ollama</button></div><p class="ai-help" id="ai-help">Ollama phải đang chạy trên máy này. AI tạo tiếp diễn biến từ nội dung bạn nhập và câu chuyện hiện có.</p></div></section></div>
     <template id="narration-input"><section class="input-card narration-card"><button class="remove">×</button><label>Tường thuật</label><textarea placeholder="Miêu tả hành động, diễn biến của nhân vật..."></textarea></section></template>
     <template id="dialogue-input"><section class="input-card dialogue-card"><button class="remove">×</button><label>Đối thoại</label><div class="dialogue-meta"><button class="self">Nhân vật chính</button><input placeholder="Tìm/gõ tên NPC..." /></div><textarea placeholder="Nội dung lời nói..."></textarea></section></template>
-    <script src="app.js?v=item-toggle-1"></script>
+    <script src="app.js?v=inventory-bag-1"></script>
     <script src="world-settings.js"></script>
-    <script src="ai.js?v=item-toggle-1"></script>
+    <script src="ai.js?v=inventory-bag-1"></script>
   </body>
 </html>
