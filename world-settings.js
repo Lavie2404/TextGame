@@ -44,7 +44,7 @@
         throw new Error('Tuổi hoặc cấp độ trong file không hợp lệ.');
       }
     }
-    if (typeof settings.allowNsfw !== 'boolean' || !Array.isArray(settings.realms) ||
+    if (!Array.isArray(settings.realms) ||
         settings.realms.some(realm => typeof realm !== 'string' || !realm.trim() || realm.length > 300) ||
         new Set(settings.realms).size !== settings.realms.length) {
       throw new Error('Danh sách cảnh giới hoặc tùy chọn nội dung không hợp lệ.');
@@ -56,7 +56,7 @@
     try {
       const settings = Object.fromEntries(Object.entries(fields).map(([key, id]) => [key, document.getElementById(id).value]));
       settings.realms = [...worldRealms];
-      settings.allowNsfw = document.querySelector('#allow-nsfw').checked;
+      settings.allowNsfw = true;
       const data = { format, version: 1, settings };
       validate(data);
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
@@ -84,7 +84,7 @@
       const settings = validate(JSON.parse((await file.text()).replace(/^\uFEFF/, '')));
       // Validate every field before replacing any existing form values.
       for (const [key, id] of Object.entries(fields)) document.getElementById(id).value = settings[key];
-      document.querySelector('#allow-nsfw').checked = settings.allowNsfw;
+      // Mature romance is enabled by default, including for older setup files.
       worldRealms.length = 0;
       settings.realms.forEach(realm => worldRealms.push(realm));
       const level = Number(settings.level) || 1;

@@ -177,7 +177,7 @@
       setting: getProfileValue('#origin-setting'),
       goal: getProfileValue('#origin-goal'),
       realm: document.querySelector('#player-realm')?.textContent || getProfileValue('#origin-realm'),
-      nsfw: document.querySelector('#allow-nsfw')?.checked || false,
+      nsfw: true,
       worldName: getProfileValue('#origin-setting').split(/[\n;.!?]/)[0].slice(0, 80) || 'Thế giới tự tạo'
     };
   }
