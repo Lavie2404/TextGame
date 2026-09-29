@@ -436,6 +436,10 @@
     }
   }
 
+  function narrationPerspectiveRule(profile) {
+    return `NGÔI KỂ THỐNG NHẤT: Toàn bộ lời dẫn truyện dùng ngôi thứ hai, gọi nhân vật người chơi là "ngươi". Nhân vật người chơi là ${profile.name}. Khi kể hành động, cảm giác, vị trí hoặc sở hữu của nhân vật này, dùng "ngươi", "của ngươi", "trước mặt ngươi"; không gọi bằng tên riêng hoặc "hắn", "cậu ấy", "anh ấy", "cậu ta", "chàng" và không chuyển sang "tôi", "ta" hay "bạn" trong lời dẫn. Ví dụ: "Ngươi đứng bên cầu. Hơi thở của ngươi chậm lại. Người đàn ông nhìn thẳng vào ngươi." NPC vẫn được kể bằng tên hoặc đại từ phù hợp. Chỉ áp dụng quy tắc này cho lời dẫn: lời thoại giữ cách xưng hô tự nhiên của người nói, thuộc tính speaker vẫn dùng tên thật (${profile.name} cho người chơi). Không thay tên NPC hay lời thoại bằng "ngươi". Dù lịch sử truyện, bản tóm tắt hoặc hành động nhập vào dùng ngôi khác, phần truyện mới vẫn phải dùng ngôi thứ hai. Trước khi trả lời, rà lại ngôi kể trong mọi đoạn tường thuật.`;
+  }
+
   function buildSystemPrompt(profile) {
     return [
       'Ngươi là người dẫn truyện tương tác cho game tiên hiệp Vạn Giới Ký. Viết hoàn toàn bằng tiếng Việt tự nhiên, giàu hình ảnh và có nhịp kể cuốn hút; dùng từ cổ phong vừa phải, không dịch sát văn phong tiếng Anh.',
@@ -447,6 +451,7 @@
       'ĐỊNH DẠNG ĐẦU RA CÓ CẤU TRÚC (BẮT BUỘC, KHÔNG ĐƯỢC BỎ QUA): Bất cứ câu nào một nhân vật nói thành tiếng đều phải nằm trong thẻ <dialogue speaker="Tên nhân vật">Lời nói</dialogue>. Quy tắc này áp dụng cho cả nhân vật chính và mọi NPC. Không viết lời thoại trần trong dấu ngoặc kép, không gắn lời thoại vào giữa đoạn tường thuật. Mẫu đúng: Nàng khựng bước. <dialogue speaker="Diệp Thần">Cô vừa nói gì?</dialogue> Người thiếu nữ siết cuốn sách trong tay. <dialogue speaker="Tống Thúy">Ta nói viên đá này có thể soi thấy quá khứ.</dialogue> Mẫu sai: Nàng hỏi: “Cô vừa nói gì?” Mỗi lượt nói có một thẻ riêng, speaker là tên chính xác người đang nói. Chỉ lời kể, hành động, suy nghĩ và miêu tả để ngoài thẻ. Âm thanh, tiếng động, từ mô phỏng tiếng động như “phịch”, “vù”, “rầm”, “keng” là tường thuật, tuyệt đối không cho vào thẻ thoại. Tuyệt đối không dùng chữ Hán hoặc từ viết bằng chữ Hán; chỉ viết tiếng Việt bằng chữ Quốc ngữ. Trước khi trả lời, tự rà lại và bọc mọi câu thoại còn sót; chỉ xuất truyện, không xuất lời giải thích.',
       adultIntimacyRule(profile),
       worldDirective(profile),
+      narrationPerspectiveRule(profile),
       'Chỉ xuất phần truyện có thể hiện cho người chơi. Không viết suy nghĩ nội bộ, phân tích, kế hoạch, lời dẫn meta, tiêu đề, đánh số đoạn hay Markdown. Không lặp lại yêu cầu.',
       `Gán speaker theo người thực sự nói trong tình tiết. Lời của nhân vật chính phải ghi speaker="${profile.name}"; không dùng Lời, Lời nói hoặc đại từ làm tên NPC. Giữ suy nghĩ nội tâm trong lời kể.`,
       `HỒ SƠ NHÂN VẬT: ${profile.name}${profile.age ? `, ${profile.age} tuổi` : ''}; thân phận: ${profile.identity || 'chưa xác định'}; cảnh giới: ${profile.realm || 'chưa xác định'}.`,
@@ -476,6 +481,7 @@
                 'Gán speaker theo chủ thể thực sự nói trong tình tiết. Lời của nhân vật chính phải dùng đúng tên trong hồ sơ; không dùng nhãn Lời, Lời nói hoặc đại từ làm tên NPC. Suy nghĩ nội tâm giữ trong lời kể, không chuyển thành lời nói của NPC.',
                 adultIntimacyRule(profile),
                 worldDirective(profile),
+                narrationPerspectiveRule(profile),
                 'ĐỊNH DẠNG BẮT BUỘC: Mọi câu được nhân vật nói ra phải là <dialogue speaker="Tên nhân vật">Lời nói</dialogue>, kể cả thoại của nhân vật chính. Không viết câu thoại trong ngoặc kép ngoài thẻ và không gắn thoại vào đoạn kể. Ví dụ đúng: Mưa quất lên mái ngói. <dialogue speaker="Lâm Tuyết">Huynh nghe thấy tiếng động không?</dialogue> Ví dụ sai: Mưa quất lên mái ngói. “Huynh nghe thấy tiếng động không?” nàng hỏi. Âm thanh như “phịch”, “vù”, “rầm”, “keng” là lời kể, không phải lời thoại. Chỉ viết tiếng Việt bằng chữ Quốc ngữ; tuyệt đối không có chữ Hán hay từ viết bằng chữ Hán. Hãy tự rà soát toàn bộ đầu ra trước khi kết thúc.',
                 'Viết một cảnh mở màn hoàn chỉnh dài khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn văn. Dành đủ dung lượng để cảnh diễn tiến tự nhiên qua hành động, đối thoại, không khí, giác quan, phản ứng của người xung quanh và một tình thế cụ thể; không lặp ý hay kéo dài bằng câu rỗng. Không dùng tiêu đề, lời mở đầu kiểu “Năm nay…”, câu tóm tắt kiểu “mang thân phận…”, danh sách, Markdown, phân tích hay suy nghĩ nội bộ. Không tự quyết định lựa chọn hoặc hành động quan trọng thay nhân vật chính.'
               ].join('\n\n')
