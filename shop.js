@@ -4,16 +4,10 @@ function shopCatalog(level) {
   if (!Number.isSafeInteger(level) || level < 1 || !worldRealms[realmIndex]) return [];
   const grade = Object.keys(rarity)[Math.min(realmIndex, 5)];
   const price = salePrice(grade) * 2;
-  return [
-    ['equipment', 'Trường Kiếm', '⚔'],
-    ['equipment', 'Hộ Thân Giáp', '♢'],
-    ['equipment', 'Hành Vân Ngoa', '✦'],
-    ['skill', 'Kiếm Pháp', '〽'],
-    ['skill', 'Hộ Thể Quyết', '☯'],
-    ['skill', 'Bộ Pháp', '✧']
-  ].map(([type, baseName, icon], index) => ({
-    id: `${realmIndex}-${index}`, type, name: `${worldRealms[realmIndex]} · ${baseName}`,
-    grade, icon, price
+  return Object.entries(itemKinds).map(([kind,data],index)=>({
+    id:`${realmIndex}-${index}`,type:data[0]==='Trang bị'?'equipment':'skill',
+    name:namedItems[kind][Math.min(realmIndex,5)],kind,grade,
+    icon:data[0]==='Trang bị'?'✦':'☯',price
   }));
 }
 
@@ -37,7 +31,7 @@ function shopCatalog(level) {
       const alreadyOwned = owned(product);
       const affordable = inventoryCoins >= product.price;
       const label = alreadyOwned ? 'Đã sở hữu' : affordable ? 'Mua' : 'Không đủ tiền';
-      return `<article class="shop-product"><b>${escapeHtml(product.name)}</b><small>${escapeHtml(product.grade)} · ${product.price.toLocaleString('vi-VN')} đồng</small><button type="button" data-buy="${product.id}" ${alreadyOwned || !affordable ? 'disabled' : ''} aria-label="${label}: ${escapeHtml(product.name)}">${label}</button></article>`;
+      return `<article class="shop-product"><b>${escapeHtml(product.name)}</b><small>${escapeHtml(product.grade)} · ${product.price.toLocaleString('vi-VN')} đồng</small><small>${escapeHtml(itemDescription([product.name,product.grade,product.icon,false,product.kind]))}</small><button type="button" data-buy="${product.id}" ${alreadyOwned || !affordable ? 'disabled' : ''} aria-label="${label}: ${escapeHtml(product.name)}">${label}</button></article>`;
     }).join('');
     document.querySelectorAll('[data-shop-type]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.shopType === category)));
   }
@@ -47,6 +41,7 @@ function shopCatalog(level) {
     renderShop();
   }));
   list.addEventListener('click', event => {
+    if(document.querySelector('#ai-turn').disabled)return;
     const button = event.target.closest('[data-buy]');
     if (!button) return;
     const product = shopCatalog(currentLevel()).find(item => item.id === button.dataset.buy);
@@ -56,7 +51,7 @@ function shopCatalog(level) {
       return;
     }
     inventoryCoins -= product.price;
-    (product.type === 'equipment' ? equipment : skills).push([product.name, product.grade, product.icon, false]);
+    (product.type === 'equipment' ? equipment : skills).push([product.name, product.grade, product.icon, false,product.kind]);
     renderItems();
     status.textContent = `Đã mua ${product.name} với ${product.price} đồng. Món đã được đưa vào Túi đồ.`;
     status.focus();

@@ -1,15 +1,15 @@
-const equipment=[['Thanh Phong Kiếm','Huyền phẩm','⚔'],['Hộ Tâm Giáp','Hoàng phẩm','♢']];
-const skills=[['Ngự Phong Quyết','Huyền phẩm','〽'],['Tụ Khí Thuật','Phàm phẩm','☯']];
+const equipment=[['Thanh Phong Kiếm','Huyền phẩm','⚔',true,'weapon'],['Hộ Tâm Giáp','Hoàng phẩm','♢',true,'clothing']];
+const skills=[['Ngự Phong Quyết','Huyền phẩm','〽',true,'speed'],['Tụ Khí Thuật','Phàm phẩm','☯',true,'righteous']];
 const rarity={ 'Phàm phẩm':0,'Hoàng phẩm':1,'Huyền phẩm':2,'Địa phẩm':3,'Thiên phẩm':4,'Tiên phẩm':5 };
 let inventoryCoins=0;
 function salePrice(grade){return [10,30,100,300,1000,3000][rarity[grade]]||10}
 const inputArea=document.querySelector('#inputs'),story=document.querySelector('#story');
-function itemHTML([name,grade,icon,active=true],index,type){
+function itemHTML([name,grade,icon,active=true,kind],index,type){
   const action=type==='equipment'?(active?'Tháo':'Mặc'):(active?'Tắt':'Bật');
   const state=type==='equipment'?(active?'Đang mặc':'Đã tháo'):(active?'Đang dùng':'Đã tắt');
   const extraButton=(operation,label)=>`<button type="button" class="bag-action" data-item-type="${type}" data-item-index="${index}" data-operation="${operation}" aria-label="${label} ${escapeHtml(name)}">${label}</button>`;
   const extra=active?'':type==='equipment'?extraButton('sell',`Bán · ${salePrice(grade)} đồng`)+extraButton('discard','Vứt bỏ'):extraButton('forget','Quên');
-  return `<div class="item${active?'':' item-inactive'}" data-active="${active}"><span class="item-icon">${escapeHtml(icon)}</span><span class="item-details"><b>${escapeHtml(name)}</b><small class="item-grade rarity-${rarity[grade]}">${escapeHtml(grade)}</small><small class="item-state">${state}</small></span><span class="item-actions"><button type="button" class="item-toggle" data-item-type="${type}" data-item-index="${index}" aria-label="${action} ${escapeHtml(name)}" aria-pressed="${active}">${action}</button>${extra}</span></div>`;
+  return `<div class="item${active?'':' item-inactive'}" data-active="${active}"><span class="item-icon">${escapeHtml(icon)}</span><span class="item-details"><b>${escapeHtml(name)}</b><small class="item-grade rarity-${rarity[grade]}">${escapeHtml(grade)}</small><small class="item-state">${state}</small><small class="item-effect">${escapeHtml(itemDescription([name,grade,icon,active,kind]))}</small></span><span class="item-actions"><button type="button" class="item-toggle" data-item-type="${type}" data-item-index="${index}" aria-label="${action} ${escapeHtml(name)}" aria-pressed="${active}">${action}</button>${active&&(kind?.startsWith("burst")||kind==="escape")?`<button type="button" class="burst-trigger" data-skill-index="${index}">Kích hoạt · 30 linh lực</button>`:""}${extra}</span></div>`;
 }
 function renderItems(){
   const bag=[];
@@ -21,9 +21,11 @@ function renderItems(){
   document.querySelector('#bag-list').innerHTML=bag.join('')||'<p class="inventory-empty">Túi đồ trống. Trang bị đã tháo và kỹ năng đã tắt sẽ nằm ở đây.</p>';
   document.querySelector('#bag-count').textContent=bag.length;
   document.querySelector('#inventory-coins').textContent=inventoryCoins.toLocaleString('vi-VN');
+  renderCharacterStats();
   document.dispatchEvent(new Event('inventory-changed'));
 }
 document.querySelector('#bag-list').addEventListener('click',event=>{
+  if(document.querySelector('#ai-turn').disabled)return;
   const button=event.target.closest('.bag-action');
   if(!button)return;
   const {itemType,operation}=button.dataset;
@@ -49,20 +51,37 @@ for(const selector of ['#equipment-list','#skills-list','#bag-list']){
     if(!list)return;
     const index=Number(button.dataset.itemIndex),item=list[index];
     if(!item)return;
-    item[3]=item[3]===false;
+    if(document.querySelector("#ai-turn").disabled)return;
+    if(item[3]===false)exclusiveEquip(list,item);else item[3]=false;
+    if(item[3]===false&&pendingBurst?.name===item[0])pendingBurst=null;
     renderItems();
     const destination=item[3]?(type==='equipment'?'#equipment-list':'#skills-list'):'#bag-list';
     document.querySelector(destination).querySelector(`[data-item-type="${type}"][data-item-index="${index}"]`).focus();
   });
 }
 function addInput(type){const template=document.querySelector(`#${type}-input`);const node=template.content.cloneNode(true);inputArea.append(node);inputArea.lastElementChild.querySelector('textarea').focus()}
+document.querySelector('#skills-list').addEventListener('click',event=>{
+  const button=event.target.closest('.burst-trigger');if(!button||document.querySelector('#ai-turn').disabled)return;
+  const item=skills[Number(button.dataset.skillIndex)];
+  if(!item||item[3]===false||!(item[4].startsWith('burst')||item[4]==='escape'))return;
+  const status=document.querySelector('#bag-status');
+  if(pendingBurst){status.textContent='Đã chuẩn bị một bạo phát cho lượt kế tiếp.';return}
+  if(baseStats.spirit<30){status.textContent='Cần ít nhất 30 linh lực gốc để kích hoạt.';return}
+  baseStats.spirit-=30;pendingBurst={kind:item[4],name:item[0],percent:50+itemRank(item)*10};
+  renderItems();status.textContent=`Đã kích hoạt ${item[0]} cho lượt kế tiếp, trả 30 linh lực. Nếu AI lỗi, hiệu lực vẫn được giữ.`;
+});
+function renderItemKinds(){
+  const group=document.querySelector('#item-type').value;
+  document.querySelector('#item-kind').innerHTML=Object.entries(itemKinds).filter(([,data])=>data[0]===group).map(([key,data])=>`<option value="${key}">${data[1]}</option>`).join('');
+}
+document.querySelector('#item-type').addEventListener('change',renderItemKinds);renderItemKinds();
 document.querySelectorAll('.add-action').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.add-action').forEach(x=>x.classList.remove('active'));btn.classList.add('active');addInput(btn.dataset.type)}));
 inputArea.addEventListener('click',e=>{if(e.target.matches('.remove'))e.target.closest('.input-card').remove()});
 function escapeHtml(str){const el=document.createElement('div');el.textContent=str;return el.innerHTML}
 const modal=document.querySelector('#modal');document.querySelector('#open-customize').onclick=()=>modal.classList.add('open');document.querySelector('#close-modal').onclick=()=>modal.classList.remove('open');modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});
 const settingsModal=document.querySelector('#settings-modal');document.querySelector('#open-settings').onclick=()=>settingsModal.classList.add('open');document.querySelector('#close-settings').onclick=()=>settingsModal.classList.remove('open');settingsModal.addEventListener('click',e=>{if(e.target===settingsModal)settingsModal.classList.remove('open')});
 document.querySelector('#save-custom').onclick=()=>{const name=document.querySelector('#custom-name').value.trim()||'Nhân vật vô danh',level=Math.max(1,+document.querySelector('#custom-level').value||1),realm=getRealmForLevel(level),xp=Math.max(0,Math.min(1000,+document.querySelector('#custom-xp').value||0));document.querySelector('#player-name').textContent=name;document.querySelector('#player-realm').textContent=`${realm||'Chưa có cảnh giới'} · Cấp ${level}`;document.querySelector('#xp-label').textContent=`${xp} / 1000`;document.querySelector('#xp-fill').style.width=`${xp/10}%`;renderRealmPanels(realm,level);modal.classList.remove('open')};
-document.querySelector('#create-item').onclick=()=>{const name=document.querySelector('#item-name').value.trim(),type=document.querySelector('#item-type').value,grade=document.querySelector('#item-rarity').value;if(!name)return;const list=type==='Trang bị'?equipment:skills;list.push([name,grade,type==='Trang bị'?'✦':'☯']);renderItems();document.querySelector('#item-name').value=''};
+document.querySelector('#create-item').onclick=()=>{const name=document.querySelector('#item-name').value.trim(),type=document.querySelector('#item-type').value,grade=document.querySelector('#item-rarity').value;if(!name)return;const list=type==='Trang bị'?equipment:skills;list.push([name,grade,type==='Trang bị'?'✦':'☯',false,document.querySelector('#item-kind').value]);renderItems();document.querySelector('#item-name').value=''};
 document.querySelector('#add-equipment').onclick=()=>modal.classList.add('open');document.querySelector('#add-skill').onclick=()=>modal.classList.add('open');
 const worldRealms=[];const originRealmInput=document.querySelector('#origin-realm');originRealmInput.type='number';originRealmInput.min='1';originRealmInput.placeholder='Ví dụ: 1';originRealmInput.closest('label').childNodes[0].textContent='Cấp độ hiện tại';
 document.querySelector('#custom-realm').outerHTML='<input id="custom-realm" readonly placeholder="Tự xác định theo cấp độ" />';
