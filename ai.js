@@ -341,9 +341,30 @@
     const pronoun = '(?:Cậu ấy|Anh ấy|Nàng ấy|Hắn|Cậu|Anh|Nàng|Chàng|Ngươi|Bạn|Nhân vật chính)';
     const modifiers = '(?:\\s+(?:khẽ|nhẹ nhàng|trầm giọng|vội|lạnh lùng|lớn tiếng|chậm rãi|mỉm cười))*';
     const invalidNames = /^(?:Lời|Lời nói|Tiếng|Giọng|Người đối diện|Không rõ|Chưa rõ người nói|NPC|Người lạ|Cô gái|Chàng trai|Người đàn ông|Người phụ nữ)$/iu;
-    function requireSpeaker(speaker) {
-      if (!speaker || invalidNames.test(speaker)) throw new Error('AI chưa ghi rõ tên người nói. Hãy thử lại để tạo lời thoại có tên nhân vật đầy đủ.');
-      return speaker;
+    const generatedNames = new Map();
+    const usedNames = new Set([playerName, ...[...text.matchAll(/speaker\s*=\s*["']([^"']+)["']/gi)].map(match=>match[1])]);
+    let lastNpc = '';
+    function requireSpeaker(speaker, hint = '') {
+      if (speaker && !invalidNames.test(speaker)) {
+        if(speaker!==playerName)lastNpc=speaker;
+        return speaker;
+      }
+      if (/^(?:ngươi|bạn|nhân vật chính)$/iu.test(hint)) return playerName;
+      const key = /nàng|cô gái|phụ nữ/iu.test(hint) ? 'female' : /hắn|chàng|cậu|anh|đàn ông/iu.test(hint) ? 'male' : hint.toLocaleLowerCase('vi') || 'unidentified';
+      if (!hint && lastNpc) return lastNpc;
+      if (!generatedNames.has(key)) {
+        const surnames = ['Lâm','Tống','Thẩm','Tô','Lục','Liễu','Hàn','Mộ'];
+        const given = key==='female' ? ['Thanh Dao','Nguyệt Ninh','Vân Chi','Nhược Lan'] : ['Vân Phong','Tử An','Cảnh Hành','Mặc Hiên'];
+        let index=generatedNames.size, candidate;
+        do {
+          candidate=`${surnames[index%surnames.length]} ${given[Math.floor(index/surnames.length)%given.length]}`;
+          if(index>=surnames.length*given.length)candidate+=' '+ 'An'.repeat(Math.floor(index/(surnames.length*given.length)));
+          index++;
+        } while(usedNames.has(candidate) || text.includes(candidate));
+        generatedNames.set(key,candidate);usedNames.add(candidate);
+      }
+      lastNpc=generatedNames.get(key);
+      return lastNpc;
     }
     function inferSpeaker(before, after) {
       before = before.replace(/\*\*/g, '');
@@ -374,10 +395,10 @@
         const content = match[0].replace(/^<dialogue\b[^>]*>/i, '').replace(/<\/dialogue\s*>$/i, '').trim();
         const declared = match[0].match(/speaker\s*=\s*(["'])(.*?)\1/i)?.[2]?.trim() || '';
         if (soundOnly.test(content)) output += content;
-        else if (!declared || invalidNames.test(declared) || new RegExp(`^${pronoun}$`, 'u').test(declared)) {
-          const resolved = requireSpeaker(inferSpeaker(text.slice(Math.max(0, match.index - 1200), match.index), text.slice(quotePattern.lastIndex, quotePattern.lastIndex + 180)));
+        else if (!declared || invalidNames.test(declared) || new RegExp(`^${pronoun}$`, 'iu').test(declared)) {
+          const resolved = requireSpeaker(inferSpeaker(text.slice(Math.max(0, match.index - 1200), match.index), text.slice(quotePattern.lastIndex, quotePattern.lastIndex + 180)), declared);
           output += `<dialogue speaker="${resolved}">${content}</dialogue>`;
-        } else output += match[0];
+        } else { output += match[0];if(declared!==playerName)lastNpc=declared; }
         cursor = quotePattern.lastIndex;
         continue;
       }
@@ -389,7 +410,9 @@
       }
       const before = text.slice(Math.max(0, match.index - 1200), match.index);
       const after = text.slice(quotePattern.lastIndex, Math.min(text.length, quotePattern.lastIndex + 100));
-      const speaker = requireSpeaker(inferSpeaker(before, after));
+      const nearbyHint = after.match(/^[\s,.;:!?…—–-]*(Nàng|Cô gái|Người phụ nữ|Hắn|Chàng|Cậu ấy|Anh ấy|Người đàn ông|Ngươi|Bạn)(?=\s)/iu)?.[1]
+        || before.match(/(Nàng|Cô gái|Người phụ nữ|Hắn|Chàng|Cậu ấy|Anh ấy|Người đàn ông|Ngươi|Bạn)\s+(?:khẽ\s+)?(?:nói|hỏi|đáp|thì thầm)\s*[:：]?\s*$/iu)?.[1] || '';
+      const speaker = requireSpeaker(inferSpeaker(before, after), nearbyHint);
       output += `<dialogue speaker="${speaker}">${spokenText.trim()}</dialogue>`;
       cursor = quotePattern.lastIndex;
     }
@@ -459,7 +482,7 @@
     return `NGÔI KỂ THỐNG NHẤT: Toàn bộ lời dẫn truyện dùng ngôi thứ hai, gọi nhân vật người chơi là "ngươi". Nhân vật người chơi là ${profile.name}. Khi kể hành động, cảm giác, vị trí hoặc sở hữu của nhân vật này, dùng "ngươi", "của ngươi", "trước mặt ngươi"; không gọi bằng tên riêng hoặc "hắn", "cậu ấy", "anh ấy", "cậu ta", "chàng" và không chuyển sang "tôi", "ta" hay "bạn" trong lời dẫn. Ví dụ: "Ngươi đứng bên cầu. Hơi thở của ngươi chậm lại. Người đàn ông nhìn thẳng vào ngươi." NPC vẫn được kể bằng tên hoặc đại từ phù hợp. Chỉ áp dụng quy tắc này cho lời dẫn: lời thoại giữ cách xưng hô tự nhiên của người nói, thuộc tính speaker vẫn dùng tên thật (${profile.name} cho người chơi). Không thay tên NPC hay lời thoại bằng "ngươi". Dù lịch sử truyện, bản tóm tắt hoặc hành động nhập vào dùng ngôi khác, phần truyện mới vẫn phải dùng ngôi thứ hai. Trước khi trả lời, rà lại ngôi kể trong mọi đoạn tường thuật.`;
   }
 
-  const namedDialogueRule = 'NPC chỉ được nói khi có tên riêng rõ ràng. Giới thiệu tên NPC trong lời kể trước câu thoại đầu tiên, dùng nhất quán tên đó trong speaker. Không dùng NPC, Chưa rõ người nói, Người lạ, Cô gái, Nàng hoặc chức danh chung làm tên. Với nhân vật hư cấu mới, đặt tên phù hợp thời kỳ và thế giới; với nhân vật đã có tên, giữ nguyên tên. Nếu chưa thể xác định tên, không viết lời thoại cho nhân vật đó. Không gán lời của NPC sang người chơi.';
+  const namedDialogueRule = 'NPC chỉ được nói khi có tên riêng rõ ràng. Giới thiệu tên NPC trong lời kể trước câu thoại đầu tiên, dùng nhất quán tên đó trong speaker. Không dùng NPC, Chưa rõ người nói, Người lạ, Cô gái, Nàng hoặc chức danh chung làm tên. Với nhân vật hư cấu mới, đặt tên phù hợp thời kỳ và thế giới; với nhân vật đã có tên, giữ nguyên tên. Nếu NPC chưa có tên, tự sáng tạo ngay một tên cổ trang phù hợp như Lâm Vân Phong hoặc Tô Thanh Dao, giới thiệu tên và dùng nhất quán cho nhân vật đó. Không dừng truyện, không yêu cầu người chơi cung cấp tên. Không gán lời của NPC sang người chơi.';
 
   const coherentProseRule = 'VIẾT CÓ NGHĨA VÀ ĐÚNG BỐI CẢNH: Mỗi câu phải rõ chủ thể, hành động và đối tượng; lời thoại phải có mục đích phù hợp tình huống. Địa danh, phe phái, chức danh phải nhất quán với thế giới và thời kỳ đã chọn. Không ghép tên tùy tiện thành địa danh hoặc tổ chức như "biên giới Mạnh", "Mạnh Tông" khi chưa được xác lập. Với nhân vật lịch sử, không tự đổi phe phái hoặc vai trò nếu người chơi chưa thiết lập lịch sử thay thế. Nếu chưa đủ dữ kiện, dùng mô tả địa điểm rõ ràng như "bìa rừng phía bắc doanh trại", không bịa tên như một sự thật đã biết. Địa danh hư cấu mới phải được giới thiệu quan hệ với nơi hiện tại và vai trò trong tình huống. Trước khi trả lời, rà lại tên riêng, ý nghĩa câu và sự liên kết giữa lời kể với lời thoại. Trong lời kể có thể dùng **tên nhân vật**, **thân phận**, **cảnh giới** để nhấn mạnh chọn lọc; không bọc cả đoạn hoặc dùng các kiểu Markdown khác.';
 
