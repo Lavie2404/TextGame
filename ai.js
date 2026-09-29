@@ -318,25 +318,40 @@
     }
   }
 
-  function addParagraph(text, className = 'narration') {
-    const paragraph = document.createElement('p');
-    paragraph.className = className;
+  function appendEmphasized(parent, text) {
     const emphasis = /\*\*([^*\n]+)\*\*/g;
     let cursor = 0;
     for (const match of text.matchAll(emphasis)) {
-      paragraph.append(document.createTextNode(text.slice(cursor, match.index)));
+      parent.append(document.createTextNode(text.slice(cursor, match.index)));
       const strong = document.createElement('strong');
       strong.className = 'story-emphasis';
       strong.textContent = match[1];
-      paragraph.append(strong);
+      parent.append(strong);
       cursor = match.index + match[0].length;
     }
-    paragraph.append(document.createTextNode(text.slice(cursor)));
+    parent.append(document.createTextNode(text.slice(cursor)));
+  }
+
+  function addParagraph(text, className = 'narration') {
+    const paragraph = document.createElement('p');
+    paragraph.className = className;
+    appendEmphasized(paragraph, text);
     story.append(paragraph);
+  }
+
+  // The story highlights names and terms with **...**, never with quote marks.
+  // Tag markup is skipped so speaker="..." attributes stay intact.
+  function emphasizeQuotes(text) {
+    const quoted = /“([^”\n]+)”|"([^"\n]+)"|‘([^’\n]+)’|「([^」\n]+)」|(?<![\p{L}\p{N}])'([^'\n]+)'(?![\p{L}\p{N}])/gu;
+    return text.split(/(<[^>]*>)/).map(part => part.startsWith('<') ? part : part.replace(quoted, (...groups) => {
+      const inner = groups.slice(1, 6).find(value => value !== undefined).replace(/\*\*/g, '').trim();
+      return inner ? `**${inner}**` : '';
+    })).join('');
   }
 
   function appendNarrationWithDialogue(text, playerName) {
     const pattern = /<dialogue\s+speaker\s*=\s*(["'])(.*?)\1\s*>([\s\S]*?)<\/dialogue\s*>/gi;
+    text = emphasizeQuotes(text);
     let cursor = 0;
     let match;
 
@@ -363,7 +378,7 @@
         name.className = 'speaker';
         name.textContent = speaker;
         const dialogue = document.createElement('dialogue');
-        dialogue.textContent = spokenText;
+        appendEmphasized(dialogue, spokenText);
         body.append(name, dialogue);
         entry.append(avatar, body);
         story.append(entry);
@@ -374,16 +389,21 @@
     if (trailing) addParagraph(trailing);
   }
 
-  // Local Ollama models sometimes ignore the XML contract and return quoted
-  // dialogue inline. Convert those quoted utterances into the same contract
-  // before rendering or saving the turn, so both prompt history and UI agree.
-  function normalizeQuotedDialogue(text, playerName) {
-    const quotePattern = /<dialogue\b[^>]*>[\s\S]*?<\/dialogue\s*>|“([^”]+)”|"([^"]+)"|「([^」]+)」/gi;
+  // Only <dialogue> tags are speech when rendering. Resolve missing or vague
+  // speakers on those tags, and repair utterances the model left in quotes
+  // despite the contract, before rendering or saving the turn, so prompt
+  // history and UI agree. A quote only counts as speech when a speaker and a
+  // speech verb sit right beside it (“...” Lâm Tuyết hỏi.); any other quote,
+  // such as a title named mid-sentence, stays narration.
+  function normalizeDialogue(text, playerName) {
+    const dialoguePattern = /<dialogue\b[^>]*>[\s\S]*?<\/dialogue\s*>|“([^”]+)”|"([^"]+)"|「([^」]+)」|‘([^’]+)’/gi;
     const soundOnly = /^(?:phịch|bịch|thịch|bụp|bộp|rầm|ầm|choang|keng|cạch|xoẹt|vút|vù|vù vù|rắc|lộp bộp|ầm ầm|thịch thịch)[.!…]*$/iu;
     text = text.replace(/[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u{20000}-\u{2FA1F}\u{30000}-\u{323AF}]/gu, '');
     const attribution = '(?:nói|hỏi|đáp|trả lời|thì thầm|kêu lên|quát|gọi|lên tiếng|cất tiếng|lẩm bẩm|reo lên|thốt lên)';
     const name = '[\\p{Lu}][\\p{L}]+(?:[ \\t]+[\\p{Lu}][\\p{L}]+){0,3}';
     const pronoun = '(?:Cậu ấy|Anh ấy|Nàng ấy|Hắn|Cậu|Anh|Nàng|Chàng|Ngươi|Bạn|Nhân vật chính)';
+    // Narration continues a quote in lower case: “...” nàng hỏi.
+    const anyPronoun = `(?:${pronoun.slice(3, -1)}|${pronoun.slice(3, -1).toLocaleLowerCase('vi')})`;
     const modifiers = '(?:\\s+(?:khẽ|nhẹ nhàng|trầm giọng|vội|lạnh lùng|lớn tiếng|chậm rãi|mỉm cười))*';
     const invalidNames = /^(?:Lời|Lời nói|Tiếng|Giọng|Người đối diện|Không rõ|Chưa rõ người nói|NPC|Người lạ|Cô gái|Chàng trai|Người đàn ông|Người phụ nữ)$/iu;
     const generatedNames = new Map();
@@ -411,16 +431,21 @@
       lastNpc=generatedNames.get(key);
       return lastNpc;
     }
-    function inferSpeaker(before, after) {
+    // Only an attribution directly beside an utterance can identify its speaker.
+    function speechAttribution(before, after) {
       before = before.replace(/\*\*/g, '');
       after = after.replace(/\*\*/g, '');
-      // Only an attribution directly beside this utterance can identify its speaker.
-      const afterMatch = after.match(new RegExp(`^[\\s,.;:!?…—–-]*(${pronoun}|${name})${modifiers}\\s+${attribution}(?=$|[^\\p{L}])`, 'u'));
-      const beforeMatch = before.match(new RegExp(`(${pronoun}|${name})${modifiers}\\s+${attribution}\\s*[:：,]?\\s*$`, 'u'));
-      const subject = afterMatch?.[1] || beforeMatch?.[1];
-      if (!subject || invalidNames.test(subject)) return '';
-      if (/^(?:Ngươi|Bạn|Nhân vật chính)$/u.test(subject)) return playerName;
-      if (!new RegExp(`^${pronoun}$`, 'u').test(subject)) return subject;
+      const afterMatch = after.match(new RegExp(`^[\\s,.;:!?…—–-]*(${anyPronoun}|${name})${modifiers}\\s+${attribution}(?=$|[^\\p{L}])`, 'u'));
+      const beforeMatch = before.match(new RegExp(`(${anyPronoun}|${name})${modifiers}\\s+${attribution}\\s*[:：,]?\\s*$`, 'u'));
+      const subject = afterMatch?.[1] || beforeMatch?.[1] || '';
+      return invalidNames.test(subject) ? '' : subject;
+    }
+    function inferSpeaker(before, after) {
+      before = before.replace(/\*\*/g, '');
+      const subject = speechAttribution(before, after);
+      if (!subject) return '';
+      if (/^(?:Ngươi|Bạn|Nhân vật chính)$/iu.test(subject)) return playerName;
+      if (!new RegExp(`^${pronoun}$`, 'iu').test(subject)) return subject;
       // Resolve third-person pronouns to the most recent named character, not
       // to the first name mentioned later in the next sentence.
       const mentions = [...before.matchAll(/[\p{Lu}][\p{L}]+(?:[ \t]+[\p{Lu}][\p{L}]+){1,3}/gu)];
@@ -434,34 +459,45 @@
     let output = '';
     let cursor = 0;
     let match;
-    while ((match = quotePattern.exec(text))) {
+    while ((match = dialoguePattern.exec(text))) {
       output += text.slice(cursor, match.index);
-      if (match[0].toLowerCase().startsWith('<dialogue')) {
-        const content = match[0].replace(/^<dialogue\b[^>]*>/i, '').replace(/<\/dialogue\s*>$/i, '').trim();
-        const declared = match[0].match(/speaker\s*=\s*(["'])(.*?)\1/i)?.[2]?.trim() || '';
-        if (soundOnly.test(content)) output += content;
-        else if (!declared || invalidNames.test(declared) || new RegExp(`^${pronoun}$`, 'iu').test(declared)) {
-          const resolved = requireSpeaker(inferSpeaker(text.slice(Math.max(0, match.index - 1200), match.index), text.slice(quotePattern.lastIndex, quotePattern.lastIndex + 180)), declared);
-          output += `<dialogue speaker="${resolved}">${content}</dialogue>`;
-        } else { output += match[0];if(declared!==playerName)lastNpc=declared; }
-        cursor = quotePattern.lastIndex;
+      if (!match[0].startsWith('<')) {
+        const spokenText = (match[1] ?? match[2] ?? match[3] ?? match[4] ?? '').trim();
+        const before = text.slice(Math.max(0, match.index - 1200), match.index);
+        const after = text.slice(dialoguePattern.lastIndex, dialoguePattern.lastIndex + 180);
+        const subject = soundOnly.test(spokenText) ? '' : speechAttribution(before, after);
+        cursor = dialoguePattern.lastIndex;
+        if (!subject) { output += match[0]; continue; }
+        const speaker = requireSpeaker(inferSpeaker(before, after), subject);
+        // The bubble already names the speaker, so drop a bare tag clause
+        // ("Lâm Tuyết hỏi." / "Lâm Tuyết khẽ nói:") instead of leaving it dangling.
+        const clause = `(?:${anyPronoun}|${name})${modifiers}\\s+${attribution}`;
+        output = output.replace(new RegExp(`(^|[.!?…>]\\s+|\\n)${clause}\\s*[:：]\\s*$`, 'u'), '$1');
+        const tail = after.match(new RegExp(`^\\s*[,—–-]?\\s*${clause}\\s*[.!…]+(?=\\s|$)`, 'u'));
+        output += `<dialogue speaker="${speaker}">${spokenText}</dialogue>`;
+        if (tail) dialoguePattern.lastIndex = cursor += tail[0].length;
+        else {
+          // A clause that goes on after the quote (“...”, ngươi đáp, rồi quay
+          // lưng.) becomes its own narration sentence: Ngươi đáp, rồi quay lưng.
+          const joint = text.slice(cursor).match(/^\s*[,;—–-]+\s*(?=\p{Ll})/u);
+          if (joint) {
+            cursor += joint[0].length;
+            output += ` ${text[cursor].toLocaleUpperCase('vi')}`;
+            dialoguePattern.lastIndex = ++cursor;
+          }
+        }
         continue;
       }
-      const spokenText = match[1] ?? match[2] ?? match[3] ?? '';
-      if (soundOnly.test(spokenText.trim())) {
-        output += spokenText.trim();
-        cursor = quotePattern.lastIndex;
-        continue;
-      }
-      const before = text.slice(Math.max(0, match.index - 1200), match.index);
-      const after = text.slice(quotePattern.lastIndex, Math.min(text.length, quotePattern.lastIndex + 100));
-      const nearbyHint = after.match(/^[\s,.;:!?…—–-]*(Nàng|Cô gái|Người phụ nữ|Hắn|Chàng|Cậu ấy|Anh ấy|Người đàn ông|Ngươi|Bạn)(?=\s)/iu)?.[1]
-        || before.match(/(Nàng|Cô gái|Người phụ nữ|Hắn|Chàng|Cậu ấy|Anh ấy|Người đàn ông|Ngươi|Bạn)\s+(?:khẽ\s+)?(?:nói|hỏi|đáp|thì thầm)\s*[:：]?\s*$/iu)?.[1] || '';
-      const speaker = requireSpeaker(inferSpeaker(before, after), nearbyHint);
-      output += `<dialogue speaker="${speaker}">${spokenText.trim()}</dialogue>`;
-      cursor = quotePattern.lastIndex;
+      const content = match[0].replace(/^<dialogue\b[^>]*>/i, '').replace(/<\/dialogue\s*>$/i, '').trim();
+      const declared = match[0].match(/speaker\s*=\s*(["'])(.*?)\1/i)?.[2]?.trim() || '';
+      if (soundOnly.test(content)) output += content;
+      else if (!declared || invalidNames.test(declared) || new RegExp(`^${pronoun}$`, 'iu').test(declared)) {
+        const resolved = requireSpeaker(inferSpeaker(text.slice(Math.max(0, match.index - 1200), match.index), text.slice(dialoguePattern.lastIndex, dialoguePattern.lastIndex + 180)), declared);
+        output += `<dialogue speaker="${resolved}">${content}</dialogue>`;
+      } else { output += match[0];if(declared!==playerName)lastNpc=declared; }
+      cursor = dialoguePattern.lastIndex;
     }
-    return output + text.slice(cursor);
+    return emphasizeQuotes(output + text.slice(cursor));
   }
 
   window.renderNarrativeWithDialogue = (text, playerName) => {
@@ -539,7 +575,7 @@
       'Trong chương hiện tại, không sao chép lại bất kỳ câu, đoạn văn hay cảnh nào đã xuất hiện trong phần truyện gần đây, kể cả khi thay đổi vài từ. Chỉ nhắc lại dữ kiện cũ khi cần cho mạch truyện; không dựng lại cùng một khung cảnh hoặc hồi tưởng đã kể.',
       'MẠCH TRUYỆN VÀ HỒI ĐÁP TRỰC TIẾP (ƯU TIÊN CAO NHẤT): Đọc HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI và DIỄN BIẾN GẦN ĐÂY trước khi viết. Tiếp tục đúng cảnh, địa điểm, thời điểm, người đang có mặt và việc đang dang dở ở cuối phần gần đây. Nếu người chơi hỏi hoặc nói với một nhân vật, nhân vật đó phải nghe và trả lời đúng trọng tâm ngay trong lượt này; không né câu hỏi, không để người khác trả lời thay nếu không có lý do trong cảnh. Sau câu trả lời, mới kể nét mặt, hành động và hệ quả có quan hệ nhân quả rõ với câu hỏi/hành động ấy. Mỗi đoạn phải nối với đoạn ngay trước bằng hành động, lời đáp, phản ứng hoặc hệ quả; không tự chuyển cảnh, đổi chủ đề, thêm người lạ hay biến cố bất chợt không liên quan. Không bắt buộc tạo bước ngoặt ở mọi lượt; chỉ thêm sự kiện mới khi nó phát sinh hợp lý từ hành động hiện tại hoặc người chơi bật tùy chọn tình tiết bất ngờ. Không tự bịa rằng NPC đã biết điều chưa được tiết lộ.',
       'Mỗi lượt hồi đáp hướng tới khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn tự nhiên; chất lượng và mạch truyện quan trọng hơn độ dài. Chuyển hành động người chơi thành văn xuôi theo đúng thứ tự, không bỏ qua bước nào, không chép nguyên văn phần tường thuật; giữ đúng nội dung lời thoại. Mỗi đoạn phải đóng góp diễn biến, phản ứng, thông tin hoặc hệ quả mới gắn với cảnh đang diễn ra. Không lặp lại cùng hành động/hình ảnh/lời thoại; không kéo dài bằng câu rỗng. Bắt đầu ngay tại thời điểm câu chuyện đang dở. Chỉ cho nhân vật chính thực hiện những gì người chơi đã nêu; không tự thêm quyết định, lời thoại hay suy nghĩ mới cho họ.',
-      'ĐỊNH DẠNG ĐẦU RA CÓ CẤU TRÚC (BẮT BUỘC, KHÔNG ĐƯỢC BỎ QUA): Bất cứ câu nào một nhân vật nói thành tiếng đều phải nằm trong thẻ <dialogue speaker="Tên nhân vật">Lời nói</dialogue>. Quy tắc này áp dụng cho cả nhân vật chính và mọi NPC. Không viết lời thoại trần trong dấu ngoặc kép, không gắn lời thoại vào giữa đoạn tường thuật. Mẫu đúng: Nàng khựng bước. <dialogue speaker="Diệp Thần">Cô vừa nói gì?</dialogue> Người thiếu nữ siết cuốn sách trong tay. <dialogue speaker="Tống Thúy">Ta nói viên đá này có thể soi thấy quá khứ.</dialogue> Mẫu sai: Nàng hỏi: “Cô vừa nói gì?” Mỗi lượt nói có một thẻ riêng, speaker là tên chính xác người đang nói. Chỉ lời kể, hành động, suy nghĩ và miêu tả để ngoài thẻ. Âm thanh, tiếng động, từ mô phỏng tiếng động như “phịch”, “vù”, “rầm”, “keng” là tường thuật, tuyệt đối không cho vào thẻ thoại. Tuyệt đối không dùng chữ Hán hoặc từ viết bằng chữ Hán; chỉ viết tiếng Việt bằng chữ Quốc ngữ. Trước khi trả lời, tự rà lại và bọc mọi câu thoại còn sót; chỉ xuất truyện, không xuất lời giải thích.',
+      'ĐỊNH DẠNG ĐẦU RA CÓ CẤU TRÚC (BẮT BUỘC, KHÔNG ĐƯỢC BỎ QUA): Bất cứ câu nào một nhân vật nói thành tiếng đều phải nằm trong thẻ <dialogue speaker="Tên nhân vật">Lời nói</dialogue>. Quy tắc này áp dụng cho cả nhân vật chính và mọi NPC. Không viết lời thoại trần trong dấu ngoặc kép, không gắn lời thoại vào giữa đoạn tường thuật. Mẫu đúng: Nàng khựng bước. <dialogue speaker="Diệp Thần">Cô vừa nói gì?</dialogue> Người thiếu nữ siết cuốn sách trong tay. <dialogue speaker="Tống Thúy">Ta nói viên đá này có thể soi thấy quá khứ.</dialogue> Mẫu sai: Nàng hỏi: “Cô vừa nói gì?” Mỗi lượt nói có một thẻ riêng, speaker là tên chính xác người đang nói. Chỉ lời kể, hành động, suy nghĩ và miêu tả để ngoài thẻ. Âm thanh, tiếng động, từ mô phỏng tiếng động như “phịch”, “vù”, “rầm”, “keng” là tường thuật, tuyệt đối không cho vào thẻ thoại. Tên gọi, danh xưng, tên cảnh giới hay thuật ngữ được nhắc giữa câu kể (ví dụ: còn gọi là Đấu Tông sơ kỳ) cũng là tường thuật, không cho vào thẻ thoại. Muốn làm nổi bật tên gọi, thuật ngữ hay tiếng động thì viết trong cặp **...** (ví dụ: còn gọi là **Đấu Tông sơ kỳ**), tuyệt đối không dùng dấu ngoặc kép hay ngoặc đơn. Tuyệt đối không dùng chữ Hán hoặc từ viết bằng chữ Hán; chỉ viết tiếng Việt bằng chữ Quốc ngữ. Trước khi trả lời, tự rà lại và bọc mọi câu thoại còn sót; chỉ xuất truyện, không xuất lời giải thích.',
       adultIntimacyRule(profile),
       worldDirective(profile),
       narrationPerspectiveRule(profile),
@@ -577,7 +613,7 @@
                 narrationPerspectiveRule(profile),
                 namedDialogueRule,
                 coherentProseRule,
-                'ĐỊNH DẠNG BẮT BUỘC: Mọi câu được nhân vật nói ra phải là <dialogue speaker="Tên nhân vật">Lời nói</dialogue>, kể cả thoại của nhân vật chính. Không viết câu thoại trong ngoặc kép ngoài thẻ và không gắn thoại vào đoạn kể. Ví dụ đúng: Mưa quất lên mái ngói. <dialogue speaker="Lâm Tuyết">Huynh nghe thấy tiếng động không?</dialogue> Ví dụ sai: Mưa quất lên mái ngói. “Huynh nghe thấy tiếng động không?” nàng hỏi. Âm thanh như “phịch”, “vù”, “rầm”, “keng” là lời kể, không phải lời thoại. Chỉ viết tiếng Việt bằng chữ Quốc ngữ; tuyệt đối không có chữ Hán hay từ viết bằng chữ Hán. Hãy tự rà soát toàn bộ đầu ra trước khi kết thúc.',
+                'ĐỊNH DẠNG BẮT BUỘC: Mọi câu được nhân vật nói ra phải là <dialogue speaker="Tên nhân vật">Lời nói</dialogue>, kể cả thoại của nhân vật chính. Không viết câu thoại trong ngoặc kép ngoài thẻ và không gắn thoại vào đoạn kể. Ví dụ đúng: Mưa quất lên mái ngói. <dialogue speaker="Lâm Tuyết">Huynh nghe thấy tiếng động không?</dialogue> Ví dụ sai: Mưa quất lên mái ngói. “Huynh nghe thấy tiếng động không?” nàng hỏi. Âm thanh như “phịch”, “vù”, “rầm”, “keng” là lời kể, không phải lời thoại; tên gọi, danh xưng hay thuật ngữ nhắc giữa câu kể cũng vậy. Muốn làm nổi bật chúng thì viết trong cặp **...** (ví dụ: **Đấu Tông sơ kỳ**), không dùng dấu ngoặc kép hay ngoặc đơn. Chỉ viết tiếng Việt bằng chữ Quốc ngữ; tuyệt đối không có chữ Hán hay từ viết bằng chữ Hán. Hãy tự rà soát toàn bộ đầu ra trước khi kết thúc.',
                 'Không ấn định số đoạn hoặc số từ cho phần mở đầu. Viết đủ để người chơi hiểu xuất thân và tình hình hiện tại, rồi dừng ở điểm có thể lựa chọn hành động. Không lặp ý hoặc kéo dài để đạt độ dài nào đó. Không dùng tiêu đề, danh sách hoặc Markdown ngoài **cụm từ** nhấn mạnh trong lời kể. Không tự quyết định hành động quan trọng thay người chơi.'
               ].join('\n\n')
             },
@@ -603,7 +639,7 @@
       }, 600000);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
-      const opening = removeRepeatedPassages(normalizeQuotedDialogue(data.message?.content?.trim() || '', profile.name));
+      const opening = removeRepeatedPassages(normalizeDialogue(data.message?.content?.trim() || '', profile.name));
       if (!opening) throw new Error('Model không trả về đoạn mở đầu.');
       setStatus('ready');
       help.textContent = `Đã tạo cảnh mở đầu bằng ${model}.`;
@@ -723,7 +759,7 @@
         ...chapterState.turns.map(turn => turn.narrative),
         ...[...story.querySelectorAll('.narration, .story-entry dialogue')].map(node => node.textContent.trim())
       ];
-      const answer = removeRepeatedPassages(normalizeQuotedDialogue(data.message?.content?.trim() || '', profile.name), priorStory);
+      const answer = removeRepeatedPassages(normalizeDialogue(data.message?.content?.trim() || '', profile.name), priorStory);
       if (!answer) throw new Error('Model không trả về phần truyện.');
 
       answer.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean)
