@@ -70,9 +70,9 @@
           <div class="portrait"><div class="portrait-ring">✧</div><span class="online-dot"></span></div>
           <h1 id="player-name">Lý Tiềm</h1><p class="title" id="player-realm">Luyện Khí · Tầng 7</p>
           <div class="xp-block"><div><span>Tu vi</span><b id="xp-label">680 / 1000</b></div><div class="xp-track"><i id="xp-fill" style="width:68%"></i></div></div>
-          <p class="inventory-empty">Mỗi lượt truyện hoàn tất: +20 tu vi cơ bản. Tâm pháp tăng lượng tu vi nhận được; 1.000 tu vi lên 1 cấp khi có cảnh giới tương ứng.</p><div class="stat-grid">
+          <p class="inventory-empty">Mỗi lượt truyện hoàn tất: +20 tu vi cơ bản. Tâm pháp tăng lượng tu vi nhận được; ma đạo cần đủ nguyên liệu, thiếu thì không nhận tu vi. 1.000 tu vi lên 1 cấp khi có cảnh giới tương ứng.</p><div class="stat-grid">
             <div><span>⚔ Công kích</span><b id="attack">128</b></div><div><span>◈ Phòng ngự</span><b id="defense">96</b></div>
-            <div><span>➤ Tốc độ</span><b id="speed">50</b></div><div><span>✧ Linh lực</span><b id="spirit">240</b></div><div><span>♧ Khí vận</span><b id="luck">35</b></div>
+            <div><span>➤ Tốc độ</span><b id="speed">50</b></div><div><span>✧ Linh lực</span><b id="spirit">240</b></div><div><span>♥ Máu</span><b id="health">100</b></div>
           </div>
           <div class="side-section"><div class="side-heading"><span>Trang bị</span><button id="add-equipment">+</button></div><div class="item-list" id="equipment-list"></div></div>
           <div class="side-section"><div class="side-heading"><span>Kỹ năng</span><button id="add-skill">+</button></div><div class="item-list" id="skills-list"></div></div>
@@ -83,6 +83,7 @@
             <p class="inventory-wallet">Tiền: <b id="shop-coins">0</b> đồng</p>
             <div class="shop-tabs" role="group" aria-label="Loại hàng"><button type="button" data-shop-type="equipment" aria-pressed="true">Trang bị</button><button type="button" data-shop-type="skill" aria-pressed="false">Kỹ năng</button></div>
             <div id="shop-list"></div>
+            <details class="cultivation-materials"><summary>Nguyên liệu tu luyện</summary><p id="cultivation-blood" class="inventory-empty">Máu động vật: 0 phần · Máu người: 0 phần</p><p class="inventory-empty">Nguyên liệu huyết công, tách biệt với chỉ số Máu của nhân vật. Huyết công ưu tiên dùng máu động vật.</p><button type="button" data-buy-blood="animal">Máu động vật · 5 đồng/phần</button><button type="button" data-buy-blood="human">Máu người · 5 đồng/phần</button></details>
             <p id="shop-status" class="inventory-empty" role="status" tabindex="-1"></p>
           </section>
         </aside>
@@ -115,9 +116,9 @@
     <div class="modal-backdrop" id="settings-modal"><section class="custom-modal settings-modal panel"><button class="close" id="close-settings">×</button><div class="modal-kicker">THIẾT LẬP</div><h2>Người dẫn truyện AI</h2><p class="modal-intro">Kết nối Ollama và chọn mô hình viết tiếp câu chuyện.</p><div class="ai-panel"><div class="ai-panel-heading"><span>NGƯỜI DẪN TRUYỆN AI</span><span class="ai-status" id="ai-status" role="status" aria-live="polite">Chưa kết nối Ollama</span></div><div class="ai-controls"><label for="ai-model">Model</label><input id="ai-model" value="richardyoung/qwen3-8b-abliterated:Q4_K_M" /><button type="button" id="ai-check">Kiểm tra Ollama</button></div><p class="ai-help" id="ai-help">Ollama phải đang chạy trên máy này. AI tạo tiếp diễn biến từ nội dung bạn nhập và câu chuyện hiện có.</p></div></section></div>
     <template id="narration-input"><section class="input-card narration-card"><button class="remove">×</button><label>Tường thuật</label><textarea placeholder="Miêu tả hành động, diễn biến của nhân vật..."></textarea></section></template>
     <template id="dialogue-input"><section class="input-card dialogue-card"><button class="remove">×</button><label>Đối thoại</label><div class="dialogue-meta"><button class="self">Nhân vật chính</button><input placeholder="Tìm/gõ tên NPC..." /></div><textarea placeholder="Nội dung lời nói..."></textarea></section></template>
-    <script src="item-rules.js?v=1"></script><script src="app.js?v=typed-items-1"></script>
+    <script src="item-rules.js?v=blood-prices-1"></script><script src="app.js?v=blood-prices-1"></script>
     <script src="world-settings.js"></script>
-    <script src="shop.js?v=typed-items-1"></script>
-    <script src="ai.js?v=auto-npc-names-1"></script>
+    <script src="shop.js?v=blood-prices-1"></script>
+    <script src="ai.js?v=blood-prices-1"></script>
   </body>
 </html>

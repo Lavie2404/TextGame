@@ -2,13 +2,13 @@ const equipment=[['Thanh Phong Kiếm','Huyền phẩm','⚔',true,'weapon'],['H
 const skills=[['Ngự Phong Quyết','Huyền phẩm','〽',true,'speed'],['Tụ Khí Thuật','Phàm phẩm','☯',true,'righteous']];
 const rarity={ 'Phàm phẩm':0,'Hoàng phẩm':1,'Huyền phẩm':2,'Địa phẩm':3,'Thiên phẩm':4,'Tiên phẩm':5 };
 let inventoryCoins=0;
-function salePrice(grade){return [10,30,100,300,1000,3000][rarity[grade]]||10}
+function salePrice(grade,kind='weapon'){return ([10,30,100,300,1000,3000][rarity[grade]]||10)*(itemPriceWeights[kind]||1)}
 const inputArea=document.querySelector('#inputs'),story=document.querySelector('#story');
 function itemHTML([name,grade,icon,active=true,kind],index,type){
   const action=type==='equipment'?(active?'Tháo':'Mặc'):(active?'Tắt':'Bật');
   const state=type==='equipment'?(active?'Đang mặc':'Đã tháo'):(active?'Đang dùng':'Đã tắt');
   const extraButton=(operation,label)=>`<button type="button" class="bag-action" data-item-type="${type}" data-item-index="${index}" data-operation="${operation}" aria-label="${label} ${escapeHtml(name)}">${label}</button>`;
-  const extra=active?'':type==='equipment'?extraButton('sell',`Bán · ${salePrice(grade)} đồng`)+extraButton('discard','Vứt bỏ'):extraButton('forget','Quên');
+  const extra=active?'':type==='equipment'?extraButton('sell',`Bán · ${salePrice(grade,kind)} đồng`)+extraButton('discard','Vứt bỏ'):extraButton('forget','Quên');
   return `<div class="item${active?'':' item-inactive'}" data-active="${active}"><span class="item-icon">${escapeHtml(icon)}</span><span class="item-details"><b>${escapeHtml(name)}</b><small class="item-grade rarity-${rarity[grade]}">${escapeHtml(grade)}</small><small class="item-state">${state}</small><small class="item-effect">${escapeHtml(itemDescription([name,grade,icon,active,kind]))}</small></span><span class="item-actions"><button type="button" class="item-toggle" data-item-type="${type}" data-item-index="${index}" aria-label="${action} ${escapeHtml(name)}" aria-pressed="${active}">${action}</button>${active&&(kind?.startsWith("burst")||kind==="escape")?`<button type="button" class="burst-trigger" data-skill-index="${index}">Kích hoạt · 30 linh lực</button>`:""}${extra}</span></div>`;
 }
 function renderItems(){
@@ -33,7 +33,7 @@ document.querySelector('#bag-list').addEventListener('click',event=>{
   const index=Number(button.dataset.itemIndex),item=list?.[index];
   if(!Number.isInteger(index)||!item||item[3]!==false)return;
   if(!(itemType==='equipment'&&['sell','discard'].includes(operation))&&!(itemType==='skill'&&operation==='forget'))return;
-  const amount=operation==='sell'?salePrice(item[1]):0;
+  const amount=operation==='sell'?salePrice(item[1],item[4]):0;
   inventoryCoins+=amount;
   list.splice(index,1);
   renderItems();

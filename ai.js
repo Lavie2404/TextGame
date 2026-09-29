@@ -205,8 +205,8 @@
   function getWorldContext(profile) {
     const readItems = selector => [...document.querySelectorAll(`${selector} .item`)]
       .map(item => `${item.querySelector('b')?.textContent || ''} (${item.querySelector('.item-grade')?.textContent || ''}; ${(item.querySelector('.item-state')?.textContent || 'đang dùng') + '; ' + (item.querySelector('.item-effect')?.textContent || '')})`).filter(Boolean);
-    const stats = ['#attack', '#defense', '#speed', '#spirit', '#luck']
-      .map((selector, index) => `${['Công kích', 'Phòng ngự', 'Tốc độ', 'Linh lực', 'Khí vận'][index]}: ${document.querySelector(selector)?.textContent?.trim() || 'chưa rõ'}`)
+    const stats = ['#attack', '#defense', '#speed', '#spirit', '#health']
+      .map((selector, index) => `${['Công kích', 'Phòng ngự', 'Tốc độ', 'Linh lực', 'Máu'][index]}: ${document.querySelector(selector)?.textContent?.trim() || 'chưa rõ'}`)
       .join('; ');
     return [
       `HỒ SƠ: ${profile.name}; ${profile.age || 'tuổi chưa rõ'}; thân phận ${profile.identity || 'chưa rõ'}; cảnh giới ${profile.realm || 'chưa rõ'}.`,
@@ -218,8 +218,9 @@
       `KỸ NĂNG ĐANG DÙNG: ${readItems('#skills-list').join('; ') || 'không có'}.`,
       `TÚI ĐỒ (chưa sử dụng): ${readItems('#bag-list').join('; ') || 'trống'}.`,
       `TIỀN HIỆN CÓ: ${document.querySelector('#inventory-coins')?.textContent || '0'} đồng.`,
+      `NGUYÊN LIỆU HUYẾT CÔNG: ${cultivationBlood.animal} phần máu động vật, ${cultivationBlood.human} phần máu người. Đây là nguyên liệu riêng, không phải chỉ số Máu/sinh lực. Tâm pháp ma đạo hiện tại cần số phần máu bằng bậc phẩm chất mỗi lượt; có thể dùng một trong hai nguồn hoặc kết hợp. Thiếu nguyên liệu thì không tu luyện được, không nhận tu vi. Không dùng linh lực để thay điều kiện này.`,
       `BẠO PHÁT LƯỢT NÀY: ${pendingBurst ? `${pendingBurst.name}: ${pendingBurst.kind}, +${pendingBurst.percent}%; đã trả 30 linh lực, chỉ có hiệu lực lượt này.` : 'Không kích hoạt. Không tự dùng công pháp trả giá.'}`,
-      'Chỉ số hiển thị đã cộng hiệu ứng trang bị và kỹ năng; không cộng hai lần. Công pháp trốn chạy chỉ hỗ trợ thoát thân khi được kích hoạt, không bảo đảm thành công. Mỗi lượt hoàn tất nhận 20 tu vi cơ bản, nhân hệ số tâm pháp đang dùng; hệ thống tự tính tu vi và chi phí, không tự bịa thay đổi số liệu.',
+      'Chỉ số hiển thị đã cộng hiệu ứng trang bị và kỹ năng; không cộng hai lần. Công pháp trốn chạy chỉ hỗ trợ thoát thân khi được kích hoạt, không bảo đảm thành công. Mỗi lượt hoàn tất nhận 20 tu vi cơ bản, nhân hệ số tâm pháp đang dùng; riêng tâm pháp ma đạo thiếu nguyên liệu thì nhận 0 tu vi; hệ thống tự tính tu vi và chi phí, không tự bịa thay đổi số liệu.',
       'Danh sách trang bị, kỹ năng và túi đồ hiện tại là nguồn chính xác về sở hữu. Không sử dụng lại món đã bán, vứt bỏ hoặc kỹ năng đã quên chỉ vì chúng xuất hiện trong truyện trước đó.',
       'Chỉ sử dụng trang bị đang mặc và kỹ năng đang dùng. Trang bị đã tháo và kỹ năng đã tắt vẫn được sở hữu nhưng không có hiệu lực; không tự mặc lại hay bật lại thay người chơi.',
       `CHƯƠNG ĐANG KỂ: ${document.querySelector('.chapter span')?.textContent?.trim() || 'CHƯƠNG 01'}.`,

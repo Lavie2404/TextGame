@@ -3,11 +3,11 @@ function shopCatalog(level) {
   const realmIndex = Math.floor((level - 1) / 10);
   if (!Number.isSafeInteger(level) || level < 1 || !worldRealms[realmIndex]) return [];
   const grade = Object.keys(rarity)[Math.min(realmIndex, 5)];
-  const price = salePrice(grade) * 2;
+
   return Object.entries(itemKinds).map(([kind,data],index)=>({
     id:`${realmIndex}-${index}`,type:data[0]==='Trang bị'?'equipment':'skill',
     name:namedItems[kind][Math.min(realmIndex,5)],kind,grade,
-    icon:data[0]==='Trang bị'?'✦':'☯',price
+    icon:data[0]==='Trang bị'?'✦':'☯',price:salePrice(grade,kind)*2
   }));
 }
 
@@ -24,6 +24,7 @@ function shopCatalog(level) {
     const level = currentLevel();
     const catalog = shopCatalog(level);
     document.querySelector('#shop-coins').textContent = inventoryCoins.toLocaleString('vi-VN');
+    document.querySelectorAll('[data-buy-blood]').forEach(button=>{button.disabled=inventoryCoins<5});
     document.querySelector('#shop-tier').textContent = catalog.length
       ? `${getRealmForLevel(level)} · Hàng ${catalog[0].grade}. Phẩm chất tăng theo thứ tự cảnh giới, tối đa Tiên phẩm.`
       : 'Hãy bắt đầu hành trình với cảnh giới hợp lệ để xem hàng.';
@@ -57,6 +58,13 @@ function shopCatalog(level) {
     status.focus();
   });
   document.addEventListener('inventory-changed', renderShop);
+  document.querySelectorAll('[data-buy-blood]').forEach(button=>button.addEventListener('click',()=>{
+    if(document.querySelector('#ai-turn').disabled)return;
+    const type=button.dataset.buyBlood;
+    if(!['animal','human'].includes(type)||inventoryCoins<5)return;
+    inventoryCoins-=5;cultivationBlood[type]++;
+    renderItems();status.textContent=`Đã mua 1 phần ${type==='animal'?'máu động vật':'máu người'} để tu luyện.`;
+  }));
   new MutationObserver(renderShop).observe(document.querySelector('#player-realm'), { childList: true, characterData: true, subtree: true });
   renderShop();
 })();
