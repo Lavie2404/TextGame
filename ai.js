@@ -485,7 +485,7 @@
               role: 'system',
               content: [
                 'Ngươi là tác giả mở màn cho game tiên hiệp tương tác Vạn Giới Ký. Hãy kể bằng tiếng Việt tự nhiên, giàu hình ảnh, câu văn có nhịp điệu và cổ phong vừa phải.',
-                'Giới thiệu ngắn gọn, hợp lý xuất thân của người chơi và tình hình hiện tại: ngươi là ai, vì sao có mặt ở đây, đang ở đâu và đang đối diện việc gì. Dựa sát hồ sơ đã nhập, kết nối thành vài đoạn văn tự nhiên thay vì liệt kê thông tin.',
+                'Giới thiệu đầy đủ, hợp lý xuất thân của người chơi và tình hình hiện tại: ngươi là ai, có thân phận và hoàn cảnh ra sao, vì sao có mặt ở đây, đang ở đâu và đang đối diện việc gì. Dựa sát hồ sơ đã nhập, kết nối thành văn xuôi tự nhiên thay vì liệt kê thông tin.',
                 'Bối cảnh phải phù hợp thế giới và thời kỳ đã chọn. Không bắt buộc thêm bí ẩn, biến cố hay NPC. Kết ở tình huống hiện tại để người chơi tự chọn hành động tiếp theo.',
                 'Gán speaker theo chủ thể thực sự nói trong tình tiết. Lời của nhân vật chính phải dùng đúng tên trong hồ sơ; không dùng nhãn Lời, Lời nói hoặc đại từ làm tên NPC. Suy nghĩ nội tâm giữ trong lời kể, không chuyển thành lời nói của NPC.',
                 adultIntimacyRule(profile),
@@ -493,7 +493,7 @@
                 narrationPerspectiveRule(profile),
                 namedDialogueRule,
                 'ĐỊNH DẠNG BẮT BUỘC: Mọi câu được nhân vật nói ra phải là <dialogue speaker="Tên nhân vật">Lời nói</dialogue>, kể cả thoại của nhân vật chính. Không viết câu thoại trong ngoặc kép ngoài thẻ và không gắn thoại vào đoạn kể. Ví dụ đúng: Mưa quất lên mái ngói. <dialogue speaker="Lâm Tuyết">Huynh nghe thấy tiếng động không?</dialogue> Ví dụ sai: Mưa quất lên mái ngói. “Huynh nghe thấy tiếng động không?” nàng hỏi. Âm thanh như “phịch”, “vù”, “rầm”, “keng” là lời kể, không phải lời thoại. Chỉ viết tiếng Việt bằng chữ Quốc ngữ; tuyệt đối không có chữ Hán hay từ viết bằng chữ Hán. Hãy tự rà soát toàn bộ đầu ra trước khi kết thúc.',
-                'Chỉ viết 2–4 đoạn ngắn, khoảng 150–300 từ; có thể ngắn hơn nếu đã giới thiệu đủ xuất thân và tình hình. Không kéo dài cho đủ số từ. Không dùng tiêu đề, danh sách hay Markdown. Không tự quyết định hành động quan trọng thay người chơi.'
+                'Không ấn định số đoạn hoặc số từ cho phần mở đầu. Viết đủ để người chơi hiểu xuất thân và tình hình hiện tại, rồi dừng ở điểm có thể lựa chọn hành động. Không lặp ý hoặc kéo dài để đạt độ dài nào đó. Không dùng tiêu đề, danh sách hay Markdown. Không tự quyết định hành động quan trọng thay người chơi.'
               ].join('\n\n')
             },
             {
@@ -506,14 +506,14 @@
                 `Bối cảnh thế giới: ${profile.setting}.`,
                 `Mục tiêu ban đầu: ${profile.goal || 'Chưa đặt mục tiêu cụ thể.'}`,
                 `Cho phép chủ đề tình cảm trưởng thành: ${profile.allowNsfw ? 'có bật, nhưng vẫn phải áp dụng quy tắc tuổi trưởng thành và đồng thuận' : 'không'}.`,
-                'Giới thiệu sơ qua xuất thân và hoàn cảnh hiện tại từ các dữ kiện trên, bằng ngôi thứ hai. Nếu có NPC nói chuyện, giới thiệu tên riêng của NPC trước khi họ nói.'
+                'Giới thiệu đầy đủ xuất thân và hoàn cảnh hiện tại từ các dữ kiện trên, bằng ngôi thứ hai. Nếu có NPC nói chuyện, giới thiệu tên riêng của NPC trước khi họ nói.'
               ].join('\n')
             }
           ],
           think: false,
           stream: false,
           keep_alive: '10m',
-          options: { temperature: 0.85, top_p: 0.92, repeat_penalty: 1.18, repeat_last_n: 512, num_predict: 1200 }
+          options: { temperature: 0.85, top_p: 0.92, repeat_penalty: 1.18, repeat_last_n: 512, num_predict: -1 }
         })
       }, 600000);
       const data = await response.json();
