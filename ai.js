@@ -280,7 +280,17 @@
   function addParagraph(text, className = 'narration') {
     const paragraph = document.createElement('p');
     paragraph.className = className;
-    paragraph.textContent = text;
+    const emphasis = /\*\*([^*\n]+)\*\*/g;
+    let cursor = 0;
+    for (const match of text.matchAll(emphasis)) {
+      paragraph.append(document.createTextNode(text.slice(cursor, match.index)));
+      const strong = document.createElement('strong');
+      strong.className = 'story-emphasis';
+      strong.textContent = match[1];
+      paragraph.append(strong);
+      cursor = match.index + match[0].length;
+    }
+    paragraph.append(document.createTextNode(text.slice(cursor)));
     story.append(paragraph);
   }
 
@@ -288,9 +298,9 @@
     const pattern = /<dialogue\s+speaker\s*=\s*(["'])(.*?)\1\s*>([\s\S]*?)<\/dialogue\s*>/gi;
     let cursor = 0;
     let match;
-    let foundDialogue = false;
+
     while ((match = pattern.exec(text))) {
-      foundDialogue = true;
+
       const narration = text.slice(cursor, match.index).replace(/<\/?dialogue\b[^>]*>/gi, '').trim();
       if (narration) addParagraph(narration);
       const speaker = match[2].trim() || 'Không rõ';
@@ -315,7 +325,6 @@
     }
     const trailing = text.slice(cursor).replace(/<\/?dialogue\b[^>]*>/gi, '').trim();
     if (trailing) addParagraph(trailing);
-    if (!foundDialogue) addParagraph(text.replace(/<\/?dialogue\b[^>]*>/gi, '').trim());
   }
 
   // Local Ollama models sometimes ignore the XML contract and return quoted
@@ -335,6 +344,8 @@
       return speaker;
     }
     function inferSpeaker(before, after) {
+      before = before.replace(/\*\*/g, '');
+      after = after.replace(/\*\*/g, '');
       // Only an attribution directly beside this utterance can identify its speaker.
       const afterMatch = after.match(new RegExp(`^[\\s,.;:!?…—–-]*(${pronoun}|${name})${modifiers}\\s+${attribution}(?=$|[^\\p{L}])`, 'u'));
       const beforeMatch = before.match(new RegExp(`(${pronoun}|${name})${modifiers}\\s+${attribution}\\s*[:：,]?\\s*$`, 'u'));
@@ -448,6 +459,8 @@
 
   const namedDialogueRule = 'NPC chỉ được nói khi có tên riêng rõ ràng. Giới thiệu tên NPC trong lời kể trước câu thoại đầu tiên, dùng nhất quán tên đó trong speaker. Không dùng NPC, Chưa rõ người nói, Người lạ, Cô gái, Nàng hoặc chức danh chung làm tên. Với nhân vật hư cấu mới, đặt tên phù hợp thời kỳ và thế giới; với nhân vật đã có tên, giữ nguyên tên. Nếu chưa thể xác định tên, không viết lời thoại cho nhân vật đó. Không gán lời của NPC sang người chơi.';
 
+  const coherentProseRule = 'VIẾT CÓ NGHĨA VÀ ĐÚNG BỐI CẢNH: Mỗi câu phải rõ chủ thể, hành động và đối tượng; lời thoại phải có mục đích phù hợp tình huống. Địa danh, phe phái, chức danh phải nhất quán với thế giới và thời kỳ đã chọn. Không ghép tên tùy tiện thành địa danh hoặc tổ chức như "biên giới Mạnh", "Mạnh Tông" khi chưa được xác lập. Với nhân vật lịch sử, không tự đổi phe phái hoặc vai trò nếu người chơi chưa thiết lập lịch sử thay thế. Nếu chưa đủ dữ kiện, dùng mô tả địa điểm rõ ràng như "bìa rừng phía bắc doanh trại", không bịa tên như một sự thật đã biết. Địa danh hư cấu mới phải được giới thiệu quan hệ với nơi hiện tại và vai trò trong tình huống. Trước khi trả lời, rà lại tên riêng, ý nghĩa câu và sự liên kết giữa lời kể với lời thoại. Trong lời kể có thể dùng **tên nhân vật**, **thân phận**, **cảnh giới** để nhấn mạnh chọn lọc; không bọc cả đoạn hoặc dùng các kiểu Markdown khác.';
+
   function buildSystemPrompt(profile) {
     return [
       'Ngươi là người dẫn truyện tương tác cho game tiên hiệp Vạn Giới Ký. Viết hoàn toàn bằng tiếng Việt tự nhiên, giàu hình ảnh và có nhịp kể cuốn hút; dùng từ cổ phong vừa phải, không dịch sát văn phong tiếng Anh.',
@@ -461,7 +474,8 @@
       worldDirective(profile),
       narrationPerspectiveRule(profile),
       namedDialogueRule,
-      'Chỉ xuất phần truyện có thể hiện cho người chơi. Không viết suy nghĩ nội bộ, phân tích, kế hoạch, lời dẫn meta, tiêu đề, đánh số đoạn hay Markdown. Không lặp lại yêu cầu.',
+      coherentProseRule,
+      'Chỉ xuất phần truyện có thể hiện cho người chơi. Không viết suy nghĩ nội bộ, phân tích, kế hoạch, lời dẫn meta, tiêu đề, đánh số đoạn; chỉ cho phép **cụm từ** để nhấn mạnh trong lời kể. Không lặp lại yêu cầu.',
       `Gán speaker theo người thực sự nói trong tình tiết. Lời của nhân vật chính phải ghi speaker="${profile.name}"; không dùng Lời, Lời nói hoặc đại từ làm tên NPC. Giữ suy nghĩ nội tâm trong lời kể.`,
       `HỒ SƠ NHÂN VẬT: ${profile.name}${profile.age ? `, ${profile.age} tuổi` : ''}; thân phận: ${profile.identity || 'chưa xác định'}; cảnh giới: ${profile.realm || 'chưa xác định'}.`,
       `BỐI CẢNH THẾ GIỚI: ${profile.setting || 'Thế giới tu tiên với tông môn, cảnh giới, bí cảnh và cơ duyên.'}`,
@@ -492,8 +506,9 @@
                 worldDirective(profile),
                 narrationPerspectiveRule(profile),
                 namedDialogueRule,
+                coherentProseRule,
                 'ĐỊNH DẠNG BẮT BUỘC: Mọi câu được nhân vật nói ra phải là <dialogue speaker="Tên nhân vật">Lời nói</dialogue>, kể cả thoại của nhân vật chính. Không viết câu thoại trong ngoặc kép ngoài thẻ và không gắn thoại vào đoạn kể. Ví dụ đúng: Mưa quất lên mái ngói. <dialogue speaker="Lâm Tuyết">Huynh nghe thấy tiếng động không?</dialogue> Ví dụ sai: Mưa quất lên mái ngói. “Huynh nghe thấy tiếng động không?” nàng hỏi. Âm thanh như “phịch”, “vù”, “rầm”, “keng” là lời kể, không phải lời thoại. Chỉ viết tiếng Việt bằng chữ Quốc ngữ; tuyệt đối không có chữ Hán hay từ viết bằng chữ Hán. Hãy tự rà soát toàn bộ đầu ra trước khi kết thúc.',
-                'Không ấn định số đoạn hoặc số từ cho phần mở đầu. Viết đủ để người chơi hiểu xuất thân và tình hình hiện tại, rồi dừng ở điểm có thể lựa chọn hành động. Không lặp ý hoặc kéo dài để đạt độ dài nào đó. Không dùng tiêu đề, danh sách hay Markdown. Không tự quyết định hành động quan trọng thay người chơi.'
+                'Không ấn định số đoạn hoặc số từ cho phần mở đầu. Viết đủ để người chơi hiểu xuất thân và tình hình hiện tại, rồi dừng ở điểm có thể lựa chọn hành động. Không lặp ý hoặc kéo dài để đạt độ dài nào đó. Không dùng tiêu đề, danh sách hoặc Markdown ngoài **cụm từ** nhấn mạnh trong lời kể. Không tự quyết định hành động quan trọng thay người chơi.'
               ].join('\n\n')
             },
             {
