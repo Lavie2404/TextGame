@@ -329,7 +329,11 @@
     const name = '[\\p{Lu}][\\p{L}]+(?:[ \\t]+[\\p{Lu}][\\p{L}]+){0,3}';
     const pronoun = '(?:Cậu ấy|Anh ấy|Nàng ấy|Hắn|Cậu|Anh|Nàng|Chàng|Ngươi|Bạn|Nhân vật chính)';
     const modifiers = '(?:\\s+(?:khẽ|nhẹ nhàng|trầm giọng|vội|lạnh lùng|lớn tiếng|chậm rãi|mỉm cười))*';
-    const invalidNames = /^(?:Lời|Lời nói|Tiếng|Giọng|Người đối diện|Không rõ|Chưa rõ người nói)$/iu;
+    const invalidNames = /^(?:Lời|Lời nói|Tiếng|Giọng|Người đối diện|Không rõ|Chưa rõ người nói|NPC|Người lạ|Cô gái|Chàng trai|Người đàn ông|Người phụ nữ)$/iu;
+    function requireSpeaker(speaker) {
+      if (!speaker || invalidNames.test(speaker)) throw new Error('AI chưa ghi rõ tên người nói. Hãy thử lại để tạo lời thoại có tên nhân vật đầy đủ.');
+      return speaker;
+    }
     function inferSpeaker(before, after) {
       // Only an attribution directly beside this utterance can identify its speaker.
       const afterMatch = after.match(new RegExp(`^[\\s,.;:!?…—–-]*(${pronoun}|${name})${modifiers}\\s+${attribution}(?=$|[^\\p{L}])`, 'u'));
@@ -343,7 +347,9 @@
       const mentions = [...before.matchAll(/[\p{Lu}][\p{L}]+(?:[ \t]+[\p{Lu}][\p{L}]+){1,3}/gu)];
       const lastName = mentions.at(-1);
       const playerAt = playerName ? before.lastIndexOf(playerName) : -1;
-      if (playerAt >= 0 && (!lastName || playerAt >= lastName.index)) return playerName;
+      // A third-person pronoun describes an NPC in second-person narration.
+      // Do not turn "Nàng" into the player just because their name occurs nearby.
+      if (lastName?.[0] === playerName || playerAt > (lastName?.index ?? -1)) return '';
       return lastName?.[0] || '';
     }
     let output = '';
@@ -356,7 +362,7 @@
         const declared = match[0].match(/speaker\s*=\s*(["'])(.*?)\1/i)?.[2]?.trim() || '';
         if (soundOnly.test(content)) output += content;
         else if (!declared || invalidNames.test(declared) || new RegExp(`^${pronoun}$`, 'u').test(declared)) {
-          const resolved = inferSpeaker(text.slice(Math.max(0, match.index - 1200), match.index), text.slice(quotePattern.lastIndex, quotePattern.lastIndex + 180)) || 'Chưa rõ người nói';
+          const resolved = requireSpeaker(inferSpeaker(text.slice(Math.max(0, match.index - 1200), match.index), text.slice(quotePattern.lastIndex, quotePattern.lastIndex + 180)));
           output += `<dialogue speaker="${resolved}">${content}</dialogue>`;
         } else output += match[0];
         cursor = quotePattern.lastIndex;
@@ -370,7 +376,7 @@
       }
       const before = text.slice(Math.max(0, match.index - 1200), match.index);
       const after = text.slice(quotePattern.lastIndex, Math.min(text.length, quotePattern.lastIndex + 100));
-      const speaker = inferSpeaker(before, after) || 'Chưa rõ người nói';
+      const speaker = requireSpeaker(inferSpeaker(before, after));
       output += `<dialogue speaker="${speaker}">${spokenText.trim()}</dialogue>`;
       cursor = quotePattern.lastIndex;
     }
@@ -440,6 +446,8 @@
     return `NGÔI KỂ THỐNG NHẤT: Toàn bộ lời dẫn truyện dùng ngôi thứ hai, gọi nhân vật người chơi là "ngươi". Nhân vật người chơi là ${profile.name}. Khi kể hành động, cảm giác, vị trí hoặc sở hữu của nhân vật này, dùng "ngươi", "của ngươi", "trước mặt ngươi"; không gọi bằng tên riêng hoặc "hắn", "cậu ấy", "anh ấy", "cậu ta", "chàng" và không chuyển sang "tôi", "ta" hay "bạn" trong lời dẫn. Ví dụ: "Ngươi đứng bên cầu. Hơi thở của ngươi chậm lại. Người đàn ông nhìn thẳng vào ngươi." NPC vẫn được kể bằng tên hoặc đại từ phù hợp. Chỉ áp dụng quy tắc này cho lời dẫn: lời thoại giữ cách xưng hô tự nhiên của người nói, thuộc tính speaker vẫn dùng tên thật (${profile.name} cho người chơi). Không thay tên NPC hay lời thoại bằng "ngươi". Dù lịch sử truyện, bản tóm tắt hoặc hành động nhập vào dùng ngôi khác, phần truyện mới vẫn phải dùng ngôi thứ hai. Trước khi trả lời, rà lại ngôi kể trong mọi đoạn tường thuật.`;
   }
 
+  const namedDialogueRule = 'NPC chỉ được nói khi có tên riêng rõ ràng. Giới thiệu tên NPC trong lời kể trước câu thoại đầu tiên, dùng nhất quán tên đó trong speaker. Không dùng NPC, Chưa rõ người nói, Người lạ, Cô gái, Nàng hoặc chức danh chung làm tên. Với nhân vật hư cấu mới, đặt tên phù hợp thời kỳ và thế giới; với nhân vật đã có tên, giữ nguyên tên. Nếu chưa thể xác định tên, không viết lời thoại cho nhân vật đó. Không gán lời của NPC sang người chơi.';
+
   function buildSystemPrompt(profile) {
     return [
       'Ngươi là người dẫn truyện tương tác cho game tiên hiệp Vạn Giới Ký. Viết hoàn toàn bằng tiếng Việt tự nhiên, giàu hình ảnh và có nhịp kể cuốn hút; dùng từ cổ phong vừa phải, không dịch sát văn phong tiếng Anh.',
@@ -452,6 +460,7 @@
       adultIntimacyRule(profile),
       worldDirective(profile),
       narrationPerspectiveRule(profile),
+      namedDialogueRule,
       'Chỉ xuất phần truyện có thể hiện cho người chơi. Không viết suy nghĩ nội bộ, phân tích, kế hoạch, lời dẫn meta, tiêu đề, đánh số đoạn hay Markdown. Không lặp lại yêu cầu.',
       `Gán speaker theo người thực sự nói trong tình tiết. Lời của nhân vật chính phải ghi speaker="${profile.name}"; không dùng Lời, Lời nói hoặc đại từ làm tên NPC. Giữ suy nghĩ nội tâm trong lời kể.`,
       `HỒ SƠ NHÂN VẬT: ${profile.name}${profile.age ? `, ${profile.age} tuổi` : ''}; thân phận: ${profile.identity || 'chưa xác định'}; cảnh giới: ${profile.realm || 'chưa xác định'}.`,
@@ -476,14 +485,15 @@
               role: 'system',
               content: [
                 'Ngươi là tác giả mở màn cho game tiên hiệp tương tác Vạn Giới Ký. Hãy kể bằng tiếng Việt tự nhiên, giàu hình ảnh, câu văn có nhịp điệu và cổ phong vừa phải.',
-                'Hãy DỰNG MỘT CẢNH ĐANG DIỄN RA, không tóm tắt hồ sơ, không kể tiểu sử và không diễn giải lại các ô thông tin. Mở bằng một khoảnh khắc cụ thể có địa điểm, giác quan và biến động; để thân phận, cảnh giới, mục tiêu hiện ra qua chi tiết, phản ứng của người khác và tình thế của nhân vật.',
-                'Tạo một tình huống riêng phù hợp với thế giới người chơi mô tả, gieo một bí ẩn, mối nguy hoặc cơ hội gắn với mục tiêu ban đầu. Kết ở một khoảnh khắc mở để người chơi tự quyết định bước tiếp theo.',
+                'Giới thiệu ngắn gọn, hợp lý xuất thân của người chơi và tình hình hiện tại: ngươi là ai, vì sao có mặt ở đây, đang ở đâu và đang đối diện việc gì. Dựa sát hồ sơ đã nhập, kết nối thành vài đoạn văn tự nhiên thay vì liệt kê thông tin.',
+                'Bối cảnh phải phù hợp thế giới và thời kỳ đã chọn. Không bắt buộc thêm bí ẩn, biến cố hay NPC. Kết ở tình huống hiện tại để người chơi tự chọn hành động tiếp theo.',
                 'Gán speaker theo chủ thể thực sự nói trong tình tiết. Lời của nhân vật chính phải dùng đúng tên trong hồ sơ; không dùng nhãn Lời, Lời nói hoặc đại từ làm tên NPC. Suy nghĩ nội tâm giữ trong lời kể, không chuyển thành lời nói của NPC.',
                 adultIntimacyRule(profile),
                 worldDirective(profile),
                 narrationPerspectiveRule(profile),
+                namedDialogueRule,
                 'ĐỊNH DẠNG BẮT BUỘC: Mọi câu được nhân vật nói ra phải là <dialogue speaker="Tên nhân vật">Lời nói</dialogue>, kể cả thoại của nhân vật chính. Không viết câu thoại trong ngoặc kép ngoài thẻ và không gắn thoại vào đoạn kể. Ví dụ đúng: Mưa quất lên mái ngói. <dialogue speaker="Lâm Tuyết">Huynh nghe thấy tiếng động không?</dialogue> Ví dụ sai: Mưa quất lên mái ngói. “Huynh nghe thấy tiếng động không?” nàng hỏi. Âm thanh như “phịch”, “vù”, “rầm”, “keng” là lời kể, không phải lời thoại. Chỉ viết tiếng Việt bằng chữ Quốc ngữ; tuyệt đối không có chữ Hán hay từ viết bằng chữ Hán. Hãy tự rà soát toàn bộ đầu ra trước khi kết thúc.',
-                'Viết một cảnh mở màn hoàn chỉnh dài khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn văn. Dành đủ dung lượng để cảnh diễn tiến tự nhiên qua hành động, đối thoại, không khí, giác quan, phản ứng của người xung quanh và một tình thế cụ thể; không lặp ý hay kéo dài bằng câu rỗng. Không dùng tiêu đề, lời mở đầu kiểu “Năm nay…”, câu tóm tắt kiểu “mang thân phận…”, danh sách, Markdown, phân tích hay suy nghĩ nội bộ. Không tự quyết định lựa chọn hoặc hành động quan trọng thay nhân vật chính.'
+                'Chỉ viết 2–4 đoạn ngắn, khoảng 150–300 từ; có thể ngắn hơn nếu đã giới thiệu đủ xuất thân và tình hình. Không kéo dài cho đủ số từ. Không dùng tiêu đề, danh sách hay Markdown. Không tự quyết định hành động quan trọng thay người chơi.'
               ].join('\n\n')
             },
             {
@@ -496,14 +506,14 @@
                 `Bối cảnh thế giới: ${profile.setting}.`,
                 `Mục tiêu ban đầu: ${profile.goal || 'Chưa đặt mục tiêu cụ thể.'}`,
                 `Cho phép chủ đề tình cảm trưởng thành: ${profile.allowNsfw ? 'có bật, nhưng vẫn phải áp dụng quy tắc tuổi trưởng thành và đồng thuận' : 'không'}.`,
-                'Dùng các dữ kiện này làm nền để viết cảnh mở màn có hành động và không khí. Tuyệt đối đừng liệt kê hay nhắc lại chúng như một bản tóm tắt.'
+                'Giới thiệu sơ qua xuất thân và hoàn cảnh hiện tại từ các dữ kiện trên, bằng ngôi thứ hai. Nếu có NPC nói chuyện, giới thiệu tên riêng của NPC trước khi họ nói.'
               ].join('\n')
             }
           ],
           think: false,
           stream: false,
           keep_alive: '10m',
-          options: { temperature: 0.85, top_p: 0.92, repeat_penalty: 1.18, repeat_last_n: 512, num_predict: 6000 }
+          options: { temperature: 0.85, top_p: 0.92, repeat_penalty: 1.18, repeat_last_n: 512, num_predict: 1200 }
         })
       }, 600000);
       const data = await response.json();
