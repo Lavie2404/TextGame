@@ -204,7 +204,7 @@
 
   function getWorldContext(profile) {
     const readItems = selector => [...document.querySelectorAll(`${selector} .item`)]
-      .map(item => item.innerText.trim().replace(/\s+/g, ' ')).filter(Boolean);
+      .map(item => `${item.querySelector('b')?.textContent || ''} (${item.querySelector('.item-grade')?.textContent || ''}; ${item.querySelector('.item-state')?.textContent || 'đang dùng'})`).filter(Boolean);
     const stats = ['#attack', '#defense', '#spirit', '#luck']
       .map((selector, index) => `${['Công kích', 'Phòng ngự', 'Linh lực', 'Khí vận'][index]}: ${document.querySelector(selector)?.textContent?.trim() || 'chưa rõ'}`)
       .join('; ');
@@ -216,6 +216,7 @@
       `CHỈ SỐ HIỆN TẠI: ${stats}.`,
       `TRANG BỊ ĐANG CÓ: ${readItems('#equipment-list').join('; ') || 'chưa ghi nhận'}.`,
       `KỸ NĂNG ĐANG CÓ: ${readItems('#skills-list').join('; ') || 'chưa ghi nhận'}.`,
+      'Chỉ sử dụng trang bị đang mặc và kỹ năng đang dùng. Trang bị đã tháo và kỹ năng đã tắt vẫn được sở hữu nhưng không có hiệu lực; không tự mặc lại hay bật lại thay người chơi.',
       `CHƯƠNG ĐANG KỂ: ${document.querySelector('.chapter span')?.textContent?.trim() || 'CHƯƠNG 01'}.`,
       `MỤC TIÊU HIỆN TẠI: ${document.querySelector('.quest-card h3')?.textContent?.trim() || profile.goal || 'chưa rõ'} — ${document.querySelector('.quest-card p')?.textContent?.trim() || ''}`
     ].join('\n');

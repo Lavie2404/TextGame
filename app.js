@@ -2,8 +2,23 @@ const equipment=[['Thanh Phong Kiếm','Huyền phẩm','⚔'],['Hộ Tâm Giáp
 const skills=[['Ngự Phong Quyết','Huyền phẩm','〽'],['Tụ Khí Thuật','Phàm phẩm','☯']];
 const rarity={ 'Phàm phẩm':0,'Hoàng phẩm':1,'Huyền phẩm':2,'Địa phẩm':3,'Thiên phẩm':4,'Tiên phẩm':5 };
 const inputArea=document.querySelector('#inputs'),story=document.querySelector('#story');
-function itemHTML([name,grade,icon]){return `<div class="item"><span class="item-icon">${icon}</span><span><b>${name}</b><small class="rarity-${rarity[grade]}">${grade}</small></span></div>`}
-function renderItems(){document.querySelector('#equipment-list').innerHTML=equipment.map(itemHTML).join('');document.querySelector('#skills-list').innerHTML=skills.map(itemHTML).join('')}
+function itemHTML([name,grade,icon,active=true],index,type){
+  const action=type==='equipment'?(active?'Tháo':'Mặc'):(active?'Tắt':'Bật');
+  const state=type==='equipment'?(active?'Đang mặc':'Đã tháo'):(active?'Đang dùng':'Đã tắt');
+  return `<div class="item${active?'':' item-inactive'}" data-active="${active}"><span class="item-icon">${escapeHtml(icon)}</span><span class="item-details"><b>${escapeHtml(name)}</b><small class="item-grade rarity-${rarity[grade]}">${escapeHtml(grade)}</small><small class="item-state">${state}</small></span><button type="button" class="item-toggle" data-item-index="${index}" aria-label="${action} ${escapeHtml(name)}" aria-pressed="${active}">${action}</button></div>`;
+}
+function renderItems(){document.querySelector('#equipment-list').innerHTML=equipment.map((item,index)=>itemHTML(item,index,'equipment')).join('');document.querySelector('#skills-list').innerHTML=skills.map((item,index)=>itemHTML(item,index,'skill')).join('')}
+for(const [selector,list] of [['#equipment-list',equipment],['#skills-list',skills]]){
+  document.querySelector(selector).addEventListener('click',event=>{
+    const button=event.target.closest('.item-toggle');
+    if(!button)return;
+    const index=Number(button.dataset.itemIndex),item=list[index];
+    if(!item)return;
+    item[3]=item[3]===false;
+    renderItems();
+    document.querySelector(selector).querySelector(`[data-item-index="${index}"]`).focus();
+  });
+}
 function addInput(type){const template=document.querySelector(`#${type}-input`);const node=template.content.cloneNode(true);inputArea.append(node);inputArea.lastElementChild.querySelector('textarea').focus()}
 document.querySelectorAll('.add-action').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.add-action').forEach(x=>x.classList.remove('active'));btn.classList.add('active');addInput(btn.dataset.type)}));
 inputArea.addEventListener('click',e=>{if(e.target.matches('.remove'))e.target.closest('.input-card').remove()});
