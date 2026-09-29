@@ -297,7 +297,7 @@
       const spokenText = match[3].replace(/<\/?dialogue\b[^>]*>/gi, '').trim();
       if (spokenText) {
         const entry = document.createElement('div');
-        entry.className = `story-entry ${speaker === playerName ? 'player' : 'npc'}`;
+        entry.className = `story-entry ${speaker === playerName ? 'player' : speaker === 'Chưa rõ người nói' ? 'unattributed' : 'npc'}`;
         const avatar = document.createElement('div');
         avatar.className = 'avatar';
         avatar.textContent = [...speaker][0] || '•';
@@ -326,6 +326,26 @@
     const soundOnly = /^(?:phịch|bịch|thịch|bụp|bộp|rầm|ầm|choang|keng|cạch|xoẹt|vút|vù|vù vù|rắc|lộp bộp|ầm ầm|thịch thịch)[.!…]*$/iu;
     text = text.replace(/[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u{20000}-\u{2FA1F}\u{30000}-\u{323AF}]/gu, '');
     const attribution = '(?:nói|hỏi|đáp|trả lời|thì thầm|kêu lên|quát|gọi|lên tiếng|cất tiếng|lẩm bẩm|reo lên|thốt lên)';
+    const name = '[\\p{Lu}][\\p{L}]+(?:[ \\t]+[\\p{Lu}][\\p{L}]+){0,3}';
+    const pronoun = '(?:Cậu ấy|Anh ấy|Nàng ấy|Hắn|Cậu|Anh|Nàng|Chàng|Ngươi|Bạn|Nhân vật chính)';
+    const modifiers = '(?:\\s+(?:khẽ|nhẹ nhàng|trầm giọng|vội|lạnh lùng|lớn tiếng|chậm rãi|mỉm cười))*';
+    const invalidNames = /^(?:Lời|Lời nói|Tiếng|Giọng|Người đối diện|Không rõ|Chưa rõ người nói)$/iu;
+    function inferSpeaker(before, after) {
+      // Only an attribution directly beside this utterance can identify its speaker.
+      const afterMatch = after.match(new RegExp(`^[\\s,.;:!?…—–-]*(${pronoun}|${name})${modifiers}\\s+${attribution}(?=$|[^\\p{L}])`, 'u'));
+      const beforeMatch = before.match(new RegExp(`(${pronoun}|${name})${modifiers}\\s+${attribution}\\s*[:：,]?\\s*$`, 'u'));
+      const subject = afterMatch?.[1] || beforeMatch?.[1];
+      if (!subject || invalidNames.test(subject)) return '';
+      if (/^(?:Ngươi|Bạn|Nhân vật chính)$/u.test(subject)) return playerName;
+      if (!new RegExp(`^${pronoun}$`, 'u').test(subject)) return subject;
+      // Resolve third-person pronouns to the most recent named character, not
+      // to the first name mentioned later in the next sentence.
+      const mentions = [...before.matchAll(/[\p{Lu}][\p{L}]+(?:[ \t]+[\p{Lu}][\p{L}]+){1,3}/gu)];
+      const lastName = mentions.at(-1);
+      const playerAt = playerName ? before.lastIndexOf(playerName) : -1;
+      if (playerAt >= 0 && (!lastName || playerAt >= lastName.index)) return playerName;
+      return lastName?.[0] || '';
+    }
     let output = '';
     let cursor = 0;
     let match;
@@ -333,7 +353,12 @@
       output += text.slice(cursor, match.index);
       if (match[0].toLowerCase().startsWith('<dialogue')) {
         const content = match[0].replace(/^<dialogue\b[^>]*>/i, '').replace(/<\/dialogue\s*>$/i, '').trim();
-        output += soundOnly.test(content) ? content : match[0];
+        const declared = match[0].match(/speaker\s*=\s*(["'])(.*?)\1/i)?.[2]?.trim() || '';
+        if (soundOnly.test(content)) output += content;
+        else if (!declared || invalidNames.test(declared) || new RegExp(`^${pronoun}$`, 'u').test(declared)) {
+          const resolved = inferSpeaker(text.slice(Math.max(0, match.index - 1200), match.index), text.slice(quotePattern.lastIndex, quotePattern.lastIndex + 180)) || 'Chưa rõ người nói';
+          output += `<dialogue speaker="${resolved}">${content}</dialogue>`;
+        } else output += match[0];
         cursor = quotePattern.lastIndex;
         continue;
       }
@@ -343,19 +368,9 @@
         cursor = quotePattern.lastIndex;
         continue;
       }
-      const before = text.slice(Math.max(0, match.index - 120), match.index);
+      const before = text.slice(Math.max(0, match.index - 1200), match.index);
       const after = text.slice(quotePattern.lastIndex, Math.min(text.length, quotePattern.lastIndex + 100));
-      const name = '[\\p{Lu}][\\p{L}]+(?:\\s+[\\p{Lu}][\\p{L}]+){0,2}';
-      const tailAttribution = new RegExp(`(${name})(?:\\s+(?:khẽ|nhẹ nhàng|trầm giọng|vội|lạnh lùng|lớn tiếng|chậm rãi|mỉm cười))?\\s+${attribution}\\b`, 'u');
-      const afterMatch = after.match(tailAttribution);
-      const beforeMatch = [...before.matchAll(new RegExp(name + `\\s+${attribution}\\s*[:：]?`, 'gu'))].pop();
-      let speaker = afterMatch?.[1] || beforeMatch?.[0]?.match(new RegExp(name, 'u'))?.[0] || '';
-      if (!speaker) {
-        const playerMention = before.lastIndexOf(playerName);
-        const playerAfterMention = after.indexOf(playerName);
-        if (playerMention >= 0 && before.length - playerMention < 70 || playerAfterMention >= 0 && playerAfterMention < 45) speaker = playerName;
-      }
-      if (!speaker) speaker = 'Người đối diện';
+      const speaker = inferSpeaker(before, after) || 'Chưa rõ người nói';
       output += `<dialogue speaker="${speaker}">${spokenText.trim()}</dialogue>`;
       cursor = quotePattern.lastIndex;
     }
@@ -433,6 +448,7 @@
       adultIntimacyRule(profile),
       worldDirective(profile),
       'Chỉ xuất phần truyện có thể hiện cho người chơi. Không viết suy nghĩ nội bộ, phân tích, kế hoạch, lời dẫn meta, tiêu đề, đánh số đoạn hay Markdown. Không lặp lại yêu cầu.',
+      `Gán speaker theo người thực sự nói trong tình tiết. Lời của nhân vật chính phải ghi speaker="${profile.name}"; không dùng Lời, Lời nói hoặc đại từ làm tên NPC. Giữ suy nghĩ nội tâm trong lời kể.`,
       `HỒ SƠ NHÂN VẬT: ${profile.name}${profile.age ? `, ${profile.age} tuổi` : ''}; thân phận: ${profile.identity || 'chưa xác định'}; cảnh giới: ${profile.realm || 'chưa xác định'}.`,
       `BỐI CẢNH THẾ GIỚI: ${profile.setting || 'Thế giới tu tiên với tông môn, cảnh giới, bí cảnh và cơ duyên.'}`,
       `MỤC TIÊU: ${profile.goal || 'Tiếp tục hành trình tu hành theo lựa chọn của người chơi.'}`
@@ -457,6 +473,7 @@
                 'Ngươi là tác giả mở màn cho game tiên hiệp tương tác Vạn Giới Ký. Hãy kể bằng tiếng Việt tự nhiên, giàu hình ảnh, câu văn có nhịp điệu và cổ phong vừa phải.',
                 'Hãy DỰNG MỘT CẢNH ĐANG DIỄN RA, không tóm tắt hồ sơ, không kể tiểu sử và không diễn giải lại các ô thông tin. Mở bằng một khoảnh khắc cụ thể có địa điểm, giác quan và biến động; để thân phận, cảnh giới, mục tiêu hiện ra qua chi tiết, phản ứng của người khác và tình thế của nhân vật.',
                 'Tạo một tình huống riêng phù hợp với thế giới người chơi mô tả, gieo một bí ẩn, mối nguy hoặc cơ hội gắn với mục tiêu ban đầu. Kết ở một khoảnh khắc mở để người chơi tự quyết định bước tiếp theo.',
+                'Gán speaker theo chủ thể thực sự nói trong tình tiết. Lời của nhân vật chính phải dùng đúng tên trong hồ sơ; không dùng nhãn Lời, Lời nói hoặc đại từ làm tên NPC. Suy nghĩ nội tâm giữ trong lời kể, không chuyển thành lời nói của NPC.',
                 adultIntimacyRule(profile),
                 worldDirective(profile),
                 'ĐỊNH DẠNG BẮT BUỘC: Mọi câu được nhân vật nói ra phải là <dialogue speaker="Tên nhân vật">Lời nói</dialogue>, kể cả thoại của nhân vật chính. Không viết câu thoại trong ngoặc kép ngoài thẻ và không gắn thoại vào đoạn kể. Ví dụ đúng: Mưa quất lên mái ngói. <dialogue speaker="Lâm Tuyết">Huynh nghe thấy tiếng động không?</dialogue> Ví dụ sai: Mưa quất lên mái ngói. “Huynh nghe thấy tiếng động không?” nàng hỏi. Âm thanh như “phịch”, “vù”, “rầm”, “keng” là lời kể, không phải lời thoại. Chỉ viết tiếng Việt bằng chữ Quốc ngữ; tuyệt đối không có chữ Hán hay từ viết bằng chữ Hán. Hãy tự rà soát toàn bộ đầu ra trước khi kết thúc.',
