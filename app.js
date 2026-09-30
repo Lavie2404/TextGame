@@ -100,11 +100,30 @@ document.querySelector('#demonic-panel').addEventListener('change',event=>{
 document.querySelectorAll('.add-action').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.add-action').forEach(x=>x.classList.remove('active'));btn.classList.add('active');addInput(btn.dataset.type)}));
 inputArea.addEventListener('click',e=>{if(e.target.matches('.remove'))e.target.closest('.input-card').remove()});
 function escapeHtml(str){const el=document.createElement('div');el.textContent=str;return el.innerHTML}
-const modal=document.querySelector('#modal');document.querySelector('#open-customize').onclick=()=>modal.classList.add('open');document.querySelector('#close-modal').onclick=()=>modal.classList.remove('open');modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});
+const modal=document.querySelector('#modal');
+// The customize modal edits name, level (the realm follows it) and base stats; it opens showing the current values.
+const customStatKeys=['attack','defense','speed','health'];
+function showCustomRealm(){const level=Math.max(0,Math.floor(+document.querySelector('#custom-level').value||0));document.querySelector('#custom-realm').value=realmLabelForLevel(level)||'Chưa có cảnh giới cho cấp này';return level}
+document.querySelector('#open-customize').onclick=()=>{
+  document.querySelector('#custom-name').value=document.querySelector('#player-name').textContent;
+  document.querySelector('#custom-level').value=playerLevel();showCustomRealm();
+  customStatKeys.forEach(key=>{document.querySelector(`#custom-${key}`).value=baseStats[key]});
+  document.querySelector('#custom-status').textContent='';
+  modal.classList.add('open');
+};
+document.querySelector('#custom-level').addEventListener('input',showCustomRealm);document.querySelector('#close-modal').onclick=()=>modal.classList.remove('open');modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});
 const settingsModal=document.querySelector('#settings-modal');document.querySelector('#open-settings').onclick=()=>settingsModal.classList.add('open');document.querySelector('#close-settings').onclick=()=>settingsModal.classList.remove('open');settingsModal.addEventListener('click',e=>{if(e.target===settingsModal)settingsModal.classList.remove('open')});
-document.querySelector('#save-custom').onclick=()=>{const name=document.querySelector('#custom-name').value.trim()||'Nhân vật vô danh',level=Math.max(0,+document.querySelector('#custom-level').value||0),xp=Math.max(0,Math.min(xpToNextLevel(level),+document.querySelector('#custom-xp').value||0));document.querySelector('#player-name').textContent=name;renderProgress(level,xp);modal.classList.remove('open')};
+document.querySelector('#save-custom').onclick=()=>{
+  const name=document.querySelector('#custom-name').value.trim()||'Nhân vật vô danh',level=showCustomRealm();
+  if(!realmLabelForLevel(level)){document.querySelector('#custom-status').textContent=`Cấp ${level} chưa có cảnh giới tương ứng. Thế giới này có ${worldRealms.length} cảnh giới, tối đa cấp ${worldRealms.length*10}.`;return}
+  document.querySelector('#player-name').textContent=name;
+  customStatKeys.forEach(key=>{const value=Math.floor(+document.querySelector(`#custom-${key}`).value);if(Number.isFinite(value))baseStats[key]=Math.max(key==='health'?1:0,value)});
+  // Tu vi is not editable: it restarts at 0 when the level changes and is kept otherwise.
+  renderProgress(level,level===playerLevel()?currentXp():0);renderItems();
+  modal.classList.remove('open');
+};
 document.querySelector('#create-item').onclick=()=>{const name=document.querySelector('#item-name').value.trim(),type=document.querySelector('#item-type').value,grade=document.querySelector('#item-rarity').value;if(!name)return;const list=type==='Trang bị'?equipment:skills;list.push([name,grade,type==='Trang bị'?'✦':'☯',false,document.querySelector('#item-kind').value,document.querySelector('#item-school').value,playerLevel()]);renderItems();document.querySelector('#item-name').value=''};
-document.querySelector('#add-equipment').onclick=()=>modal.classList.add('open');document.querySelector('#add-skill').onclick=()=>modal.classList.add('open');
+document.querySelector('#add-equipment').onclick=document.querySelector('#add-skill').onclick=()=>document.querySelector('#open-customize').click();
 const worldRealms=[];const originRealmInput=document.querySelector('#origin-realm');originRealmInput.type='number';originRealmInput.min='0';originRealmInput.placeholder='Ví dụ: 0 (chưa tu luyện)';originRealmInput.closest('label').childNodes[0].textContent='Cấp độ hiện tại';
 document.querySelector('#custom-realm').outerHTML='<input id="custom-realm" readonly placeholder="Tự xác định theo cấp độ" />';
 function getRealmForLevel(level){return worldRealms[Math.floor((level-1)/10)]||''}

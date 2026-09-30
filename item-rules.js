@@ -189,10 +189,11 @@ function renderCharacterStats(){
 // (level 10: 1.000, level 11: 1.650, level 21: 4.730). Leftover tu vi carries into the next level.
 // A mortal at level 0 needs 50 to take the first step to level 1.
 function xpToNextLevel(level){return level<1?50:Math.round(level*100*GRADE_COEFFICIENT**Math.floor((level-1)/10)/10)*10}
-function currentXp(){return Math.max(0,Number(document.querySelector('#custom-xp').value)||0)}
+let playerXp=0;
+function currentXp(){return playerXp}
 function renderProgress(level,xp){
   const need=xpToNextLevel(level),realm=realmLabelForLevel(level);
-  const xpInput=document.querySelector('#custom-xp');xpInput.value=xp;xpInput.max=need;
+  playerXp=Math.max(0,xp);
   document.querySelector('#custom-level').value=level;
   document.querySelector('#xp-label').textContent=`${xp.toLocaleString('vi-VN')} / ${need.toLocaleString('vi-VN')}`;
   document.querySelector('#xp-fill').style.width=`${Math.min(100,xp/need*100)}%`;
