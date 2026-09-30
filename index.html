@@ -78,14 +78,14 @@
           <div class="side-section"><div class="side-heading"><span>Kỹ năng</span><button id="add-skill">+</button></div><div class="item-list" id="skills-list"></div></div>
           <div class="side-section"><div class="side-heading"><span>Túi đồ</span><span id="bag-count" aria-label="Số món trong túi" aria-live="polite">0</span></div><p class="inventory-wallet">Tiền: <b id="inventory-coins">0</b> đồng</p><div class="item-list" id="bag-list"></div><p id="bag-status" class="inventory-empty" role="status" tabindex="-1"></p></div>
           <div class="side-section"><div class="side-heading"><span>Vật phẩm</span></div><div class="item-list" id="consumable-list"></div></div>
+          <div class="side-section" id="demonic-section" hidden><div class="side-heading"><span>Ma đạo</span></div><div id="demonic-panel" class="cultivation-materials"></div></div>
           <section class="side-section shop-section" aria-labelledby="shop-heading">
             <div class="side-heading"><span id="shop-heading">Cửa Hàng</span></div>
             <p id="shop-tier" class="inventory-empty"></p>
             <p class="inventory-wallet">Tiền: <b id="shop-coins">0</b> đồng</p>
             <div class="shop-tabs" role="group" aria-label="Loại hàng"><button type="button" data-shop-type="equipment" aria-pressed="true">Trang bị</button><button type="button" data-shop-type="skill" aria-pressed="false">Kỹ năng</button><button type="button" data-shop-type="item" aria-pressed="false">Vật phẩm</button></div>
             <div id="shop-list"></div>
-            <details class="cultivation-materials"><summary>Nguyên liệu tu luyện</summary><p id="cultivation-blood" class="inventory-empty">Máu động vật: 0 phần · Máu người: 0 phần</p><p class="inventory-empty">Nguyên liệu huyết công, tách biệt với chỉ số Máu của nhân vật. Huyết công ưu tiên dùng máu động vật.</p><button type="button" data-buy-blood="animal">Máu động vật · 5 đồng/phần</button><button type="button" data-buy-blood="human">Máu người · 5 đồng/phần</button></details>
-            <details class="cultivation-materials"><summary>Pháp môn &amp; Nô bộc</summary><div id="occult-panel"></div></details><p id="shop-status" class="inventory-empty" role="status" tabindex="-1"></p>
+            <p id="shop-status" class="inventory-empty" role="status" tabindex="-1"></p>
           </section>
         </aside>
 
@@ -106,8 +106,8 @@
 
         <aside class="rightbar">
           <section class="panel realm-card"><div class="card-kicker">CẢNH GIỚI</div><h2>Đạo đồ tu hành</h2><ol id="realm-list"></ol></section>
-          <section class="panel quest-card"><div class="card-kicker">MỤC TIÊU HIỆN TẠI</div><h3>Khảo hạch ngoại môn</h3><p>Đến Vấn Đạo Đài trước khi tiếng chuông thứ tư vang lên.</p><div class="quest-progress"><i></i></div><small>Tiến độ hành trình <b>25%</b></small></section>
-          <section class="panel notes-card"><div class="card-kicker">KÝ ỨC GẦN ĐÂY</div><p>• Được trưởng lão Từ gọi đến.</p><p>• Nhận nhiệm vụ khảo hạch.</p></section>
+          <section class="panel quest-card"><div class="card-kicker">MỤC TIÊU HIỆN TẠI</div><h3 id="quest-title">Chưa đặt mục tiêu</h3><p id="quest-step">Bắt đầu hành trình để hệ thống ghi lại bước tiếp theo sau mỗi lượt.</p><div class="quest-progress"><i id="quest-fill" style="width:0%"></i></div><small>Tiến độ hành trình <b id="quest-percent">0%</b></small></section>
+          <section class="panel notes-card"><div class="card-kicker">KÝ ỨC GẦN ĐÂY</div><div id="memory-list"><p>• Chưa có ký ức nào. Mỗi lượt chơi sẽ ghi lại một dòng.</p></div></section>
         </aside>
       </section>
     </main>
@@ -118,10 +118,10 @@
     <div class="modal-backdrop" id="npc-modal"><section class="custom-modal npc-modal panel" role="dialog" aria-modal="true" aria-labelledby="npc-profile-title"><button class="close" id="close-npc-modal" aria-label="Đóng">×</button><div class="modal-kicker">HỒ SƠ NHÂN VẬT</div><h2 id="npc-profile-title"></h2><div id="npc-profile-body"></div></section></div>
     <template id="narration-input"><section class="input-card narration-card"><button class="remove">×</button><label>Tường thuật</label><textarea placeholder="Miêu tả hành động, diễn biến của nhân vật..."></textarea></section></template>
     <template id="dialogue-input"><section class="input-card dialogue-card"><button class="remove">×</button><label>Đối thoại</label><div class="dialogue-meta"><button class="self">Nhân vật chính</button><input placeholder="Tìm/gõ tên NPC..." /></div><textarea placeholder="Nội dung lời nói..."></textarea></section></template>
-    <script src="item-rules.js?v=mind-match-1"></script><script src="demonic-rules.js?v=1"></script><script src="app.js?v=chapter-xp-1"></script>
+    <script src="item-rules.js?v=loot-1"></script><script src="demonic-rules.js?v=demonic-panel-1"></script><script src="loot.js?v=1"></script><script src="app.js?v=journal-2"></script>
     <script src="world-settings.js"></script>
-    <script src="shop.js?v=coefficients-1"></script>
+    <script src="shop.js?v=demonic-panel-1"></script>
     <script src="npc-profiles.js?v=stat-rolls-1"></script>
-    <script src="ai.js?v=chapter-xp-1"></script>
+    <script src="ai.js?v=journal-1"></script>
   </body>
 </html>

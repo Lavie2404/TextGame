@@ -33,15 +33,20 @@ function rollShopStock(level){
     if(rollsUpgrade(tier))picked[Math.floor(Math.random()*picked.length)].tier=tier+1;
     return picked;
   };
-  // Consumables are always in stock at the realm's grade and can be bought repeatedly.
+  // Consumables are always in stock and can be bought repeatedly: Bình máu at the realm's grade, plus demonic materials.
   const items=[{kind:'potion',tier}];
   if(rollsUpgrade(tier))items.push({kind:'potion',tier:tier+1});
+  Object.keys(materialOffers).forEach(material=>items.push({kind:'material',material}));
   return {id:`${Date.now()}${Math.random()}`,level,tier,equipment:slots('equipment'),skill:slots('skill'),item:items};
 }
 function shopCatalog(stock) {
   if (!stock) return [];
   const grades = Object.keys(rarity);
-  return ['equipment','skill','item'].flatMap(type => stock[type].map(({kind,school,tier},index) => {
+  return ['equipment','skill','item'].flatMap(type => stock[type].map(({kind,school,tier,material},index) => {
+    if (kind === 'material') {
+      const [name, price, unit] = materialOffers[material];
+      return {id:`${stock.id}-${type}-${index}`,type,kind,material,name,grade:`Nguyên liệu · ${unit}`,icon:'☗',price};
+    }
     const product = {
       id:`${stock.id}-${type}-${index}`,type,kind,school,grade:grades[tier],rare:tier>stock.tier,
       level:stock.level,
@@ -61,7 +66,7 @@ function shopCatalog(stock) {
   const owned = product => product.type !== 'item' && (product.type === 'equipment' ? equipment : skills)
     .some(item => item[0] === product.name && item[1] === product.grade && item[6] === product.level);
   const asItem = product => [product.name,product.grade,product.icon,false,product.kind,product.school,product.level];
-  const describe = product => product.type === 'item' ? potionDescription(asItem(product)) : itemDescription(asItem(product));
+  const describe = product => product.kind === 'material' ? materialDescription(product.material) : product.type === 'item' ? potionDescription(asItem(product)) : itemDescription(asItem(product));
   const currentChapter = () => Number(document.querySelector('.chapter span')?.textContent.match(/\d+/)?.[0]) || 1;
   let stockChapter = null, stock = null;
   const catalogNow = () => {
@@ -77,7 +82,6 @@ function shopCatalog(stock) {
   function renderShop() {
     const catalog = catalogNow();
     document.querySelector('#shop-coins').textContent = inventoryCoins.toLocaleString('vi-VN');
-    document.querySelectorAll('[data-buy-blood]').forEach(button=>{button.disabled=inventoryCoins<5});
     document.querySelector('#shop-tier').textContent = stock
       ? `Hàng làm mới mỗi chương, trang bị và kỹ năng theo cấp ${stock.level}. Phẩm từ Phàm phẩm tới ${Object.keys(rarity)[stock.tier]}; hiếm khi có phẩm cao hơn.`
       : 'Hãy bắt đầu hành trình với cảnh giới hợp lệ để xem hàng.';
@@ -105,22 +109,18 @@ function shopCatalog(stock) {
       return;
     }
     inventoryCoins -= product.price;
-    if (product.type === 'item') { const key = potionKey(product.grade, product.level); potions[key] = (potions[key] || 0) + 1; }
+    if (product.kind === 'material') occultMaterials[product.material]++;
+    else if (product.type === 'item') { const key = potionKey(product.grade, product.level); potions[key] = (potions[key] || 0) + 1; }
     else (product.type === 'equipment' ? equipment : skills).push([product.name, product.grade, product.icon, false,product.kind,product.school,product.level]);
     renderItems();
-    status.textContent = product.type === 'item'
-      ? `Đã mua ${product.name} ${product.grade} với ${product.price} đồng. Xem ở mục Vật phẩm.`
-      : `Đã mua ${product.name} với ${product.price} đồng. Món đã được đưa vào Túi đồ.`;
+    status.textContent = product.kind === 'material'
+      ? `Đã mua 1 ${materialOffers[product.material][2]} ${product.name} với ${product.price} đồng. Xem ở mục Vật phẩm.`
+      : product.type === 'item'
+        ? `Đã mua ${product.name} ${product.grade} với ${product.price} đồng. Xem ở mục Vật phẩm.`
+        : `Đã mua ${product.name} với ${product.price} đồng. Món đã được đưa vào Túi đồ.`;
     status.focus();
   });
   document.addEventListener('inventory-changed', renderShop);
-  document.querySelectorAll('[data-buy-blood]').forEach(button=>button.addEventListener('click',()=>{
-    if(document.querySelector('#ai-turn').disabled)return;
-    const type=button.dataset.buyBlood;
-    if(!['animal','human'].includes(type)||inventoryCoins<5)return;
-    inventoryCoins-=5;cultivationBlood[type]++;
-    renderItems();status.textContent=`Đã mua 1 phần ${type==='animal'?'máu động vật':'máu người'} để tu luyện.`;
-  }));
   new MutationObserver(renderShop).observe(document.querySelector('#player-realm'), { childList: true, characterData: true, subtree: true });
   new MutationObserver(renderShop).observe(document.querySelector('.chapter span'), { childList: true, characterData: true, subtree: true });
   renderShop();

@@ -17,15 +17,34 @@
     error: 'Không kết nối được Ollama'
   };
 
+  // Nhật ký hành trình hiện trên cột phải: mục tiêu dài hạn (đặt lúc khai mở), bước tiếp theo
+  // và % tiến độ do AI ước lượng sau mỗi lượt, cùng các ký ức ngắn gần nhất.
+  const MAX_JOURNAL_NOTES = 6;
+  function freshJournal(goal = '') {
+    return { goal, step: '', progress: 0, notes: [] };
+  }
+
+  function normalizeJournal(journal, fallbackGoal = '') {
+    const source = journal && typeof journal === 'object' ? journal : {};
+    return {
+      goal: typeof source.goal === 'string' ? source.goal : fallbackGoal,
+      step: typeof source.step === 'string' ? source.step : '',
+      progress: Number.isFinite(source.progress) ? Math.max(0, Math.min(100, Math.round(source.progress))) : 0,
+      notes: Array.isArray(source.notes)
+        ? source.notes.filter(note => note && typeof note.text === 'string').slice(-MAX_JOURNAL_NOTES)
+        : []
+    };
+  }
+
   function freshChapterState() {
-    return { chapterNumber: 1, turns: [], memories: [] };
+    return { chapterNumber: 1, turns: [], memories: [], journal: freshJournal() };
   }
 
   function loadChapterState() {
     try {
       const saved = JSON.parse(localStorage.getItem(CHAPTER_MEMORY_KEY) || 'null');
       if (saved && Number.isInteger(saved.chapterNumber) && Array.isArray(saved.turns) && Array.isArray(saved.memories)) {
-        return { ...saved, memories: saved.memories.slice(-MAX_REMEMBERED_CHAPTERS) };
+        return { ...saved, memories: saved.memories.slice(-MAX_REMEMBERED_CHAPTERS), journal: normalizeJournal(saved.journal) };
       }
     } catch (error) {
       console.warn('Không đọc được bộ nhớ chương đã lưu.', error);
@@ -34,6 +53,106 @@
   }
 
   let chapterState = loadChapterState();
+
+  function renderJourney() {
+    const journal = chapterState.journal;
+    const title = document.querySelector('#quest-title');
+    const step = document.querySelector('#quest-step');
+    const fill = document.querySelector('#quest-fill');
+    const percent = document.querySelector('#quest-percent');
+    const list = document.querySelector('#memory-list');
+    if (title) title.textContent = journal.goal || 'Chưa đặt mục tiêu';
+    if (step) step.textContent = journal.step || (journal.goal ? 'Hành trình vừa bắt đầu; bước tiếp theo sẽ được ghi sau lượt đầu tiên.' : 'Bắt đầu hành trình để hệ thống ghi lại bước tiếp theo sau mỗi lượt.');
+    if (fill) fill.style.width = `${journal.progress}%`;
+    if (percent) percent.textContent = `${journal.progress}%`;
+    if (list) {
+      list.replaceChildren(...(journal.notes.length ? journal.notes : [{ text: 'Chưa có ký ức nào. Mỗi lượt chơi sẽ ghi lại một dòng.' }])
+        .slice().reverse().map(note => {
+          const paragraph = document.createElement('p');
+          paragraph.textContent = `• ${note.text}`;
+          if (note.chapter) paragraph.title = `Chương ${note.chapter}, lượt ${note.turn}`;
+          return paragraph;
+        }));
+    }
+  }
+
+  // Ký ức dự phòng khi AI không trả lời: lấy câu đầu của hành động người chơi.
+  function fallbackJournalNote(action) {
+    const sentence = action.replace(/\s+/g, ' ').trim().split(/(?<=[.!?…])\s/)[0] || '';
+    return sentence.length > 120 ? `${sentence.slice(0, 117).trimEnd()}…` : sentence;
+  }
+
+  function pushJournalNote(text) {
+    const clean = (text || '').replace(/\s+/g, ' ').trim().replace(/^[•\-–]\s*/, '');
+    if (!clean) return;
+    const notes = chapterState.journal.notes;
+    if (notes.length && notes[notes.length - 1].text === clean) return;
+    notes.push({ chapter: chapterState.chapterNumber, turn: chapterState.turns.length + 1, text: clean });
+    chapterState.journal.notes = notes.slice(-MAX_JOURNAL_NOTES);
+  }
+
+  function formatJournalContext() {
+    const journal = chapterState.journal;
+    return [
+      `MỤC TIÊU HIỆN TẠI: ${journal.goal || 'chưa rõ'}${journal.step ? ` — bước tiếp theo: ${journal.step}` : ''} (tiến độ ước lượng ${journal.progress}%).`,
+      `KÝ ỨC GẦN ĐÂY (mới nhất ở cuối): ${journal.notes.length ? journal.notes.map(note => note.text).join(' | ') : 'chưa có'}.`
+    ].join('\n');
+  }
+
+  // Một lời gọi ngắn (JSON) sau mỗi lượt: rút ra 1 dòng ký ức, bước tiếp theo và % tiến độ.
+  // Lỗi hay hết giờ thì không chặn lượt chơi: ghi ký ức dự phòng từ hành động người chơi.
+  async function updateJourney(model, action, narrative) {
+    const journal = chapterState.journal;
+    help.textContent = 'Đang ghi nhật ký hành trình…';
+    let update = null;
+    try {
+      const response = await fetchWithTimeout(`${OLLAMA_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: 'Ngươi là thư ký ghi nhật ký hành trình cho game truyện. Chỉ trả về JSON đúng lược đồ, viết tiếng Việt, không văn chương. memory: MỘT câu tối đa 25 từ ghi sự việc quan trọng nhất vừa xảy ra trong lượt (ai, làm gì, kết quả), gọi nhân vật người chơi bằng "ngươi". step: MỘT câu tối đa 25 từ nêu việc cụ thể cần làm tiếp để tiến gần mục tiêu dài hạn, dựa trên tình huống cuối lượt. progress: số nguyên 0–100 ước lượng mức hoàn thành mục tiêu dài hạn tính đến hết lượt này; chỉ tăng khi có bước tiến thật, có thể giảm nếu thụt lùi; mục tiêu chưa bắt đầu là 0, đã hoàn tất là 100. Chỉ dùng dữ kiện trong tư liệu, không suy diễn.' },
+            { role: 'user', content: [
+              `MỤC TIÊU DÀI HẠN: ${journal.goal || 'chưa đặt mục tiêu cụ thể'}`,
+              `BƯỚC TIẾP THEO ĐANG GHI: ${journal.step || 'chưa có'}`,
+              `TIẾN ĐỘ ĐANG GHI: ${journal.progress}%`,
+              `KÝ ỨC GẦN ĐÂY: ${journal.notes.map(note => note.text).join(' | ') || 'chưa có'}`,
+              `HÀNH ĐỘNG NGƯỜI CHƠI LƯỢT NÀY:\n${action}`,
+              `DIỄN BIẾN VỪA KỂ:\n${narrative.length > 6000 ? `${narrative.slice(0, 3000)}\n[...]\n${narrative.slice(-3000)}` : narrative}`
+            ].join('\n\n') }
+          ],
+          format: {
+            type: 'object',
+            properties: { memory: { type: 'string' }, step: { type: 'string' }, progress: { type: 'integer' } },
+            required: ['memory', 'step', 'progress']
+          },
+          think: false,
+          stream: false,
+          keep_alive: '10m',
+          options: { temperature: 0.2, top_p: 0.8, num_predict: 220 }
+        })
+      }, 120000);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
+      const content = data.message?.content || '';
+      update = JSON.parse(content.match(/\{[\s\S]*\}/)?.[0] || content);
+    } catch (error) {
+      console.warn('Không ghi được nhật ký hành trình bằng AI; dùng bản dự phòng.', error);
+    }
+    const memory = typeof update?.memory === 'string' && update.memory.trim() ? update.memory : fallbackJournalNote(action);
+    pushJournalNote(memory);
+    if (typeof update?.step === 'string' && update.step.trim()) journal.step = update.step.replace(/\s+/g, ' ').trim();
+    if (Number.isFinite(update?.progress)) journal.progress = Math.max(0, Math.min(100, Math.round(update.progress)));
+    saveChapterState();
+    renderJourney();
+  }
+
+  window.setJourneyGoal = goal => {
+    chapterState.journal = freshJournal((goal || '').trim() || 'Bắt đầu hành trình');
+    saveChapterState();
+    renderJourney();
+  };
 
   function saveChapterState() {
     try {
@@ -52,6 +171,7 @@
     chapterState = freshChapterState();
     saveChapterState();
     updateChapterProgress();
+    renderJourney();
   };
 
   function formatChapterMemory() {
@@ -252,17 +372,20 @@
       `KỸ NĂNG ĐANG DÙNG: ${readItems('#skills-list').join('; ') || 'không có'}.`,
       `TÚI ĐỒ (chưa sử dụng): ${readItems('#bag-list').join('; ') || 'trống'}.`,
       `TIỀN HIỆN CÓ: ${document.querySelector('#inventory-coins')?.textContent || '0'} đồng.`,
-      `NGUYÊN LIỆU HUYẾT CÔNG: ${cultivationBlood.animal} phần máu động vật, ${cultivationBlood.human} phần máu người. Chỉ nhánh Huyết công dùng máu; các nhánh ma đạo khác có điều kiện riêng ghi trên kỹ năng.`,
       occultContext(),
       npcProfilesContext(),
       `BẠO PHÁT LƯỢT NÀY: ${pendingBurst ? `${pendingBurst.name}: ${burstEffectText(pendingBurst.bonus, pendingBurst.kind)}; chỉ có hiệu lực lượt này. ${burstCostText(pendingBurst.kind)}.` : 'Không kích hoạt. Không tự dùng công pháp bạo phát.'}`,
       `DI CHỨNG BẠO PHÁT: ${burstFatigue ? `đang chịu ${burstFatigue.cost} sau ${burstFatigue.name}: ${CHARACTER_STAT_LABELS[burstFatigue.stat]} giảm ${FATIGUE_PERCENT}% (chỉ số hiển thị đã trừ), không thể bạo phát; hãy thể hiện di chứng này trong lượt.` : 'không.'}`,
-      `VẬT PHẨM: ${Object.entries(potions).filter(([, count]) => count > 0).map(([key, count]) => { const potion = potionFromKey(key); return `Bình máu ${potion[1]} cấp ${itemLevel(potion)} ×${count} (hồi ${potionHeal(potion)} máu)`; }).join('; ') || 'không có'}. Người chơi tự dùng vật phẩm bằng nút trong giao diện; không tự dùng thay.`,
+      `VẬT PHẨM: ${[
+        ...Object.entries(potions).filter(([, count]) => count > 0).map(([key, count]) => { const potion = potionFromKey(key); return `Bình máu ${potion[1]} cấp ${itemLevel(potion)} ×${count} (hồi ${potionHeal(potion)} máu)`; }),
+        ...Object.entries(occultMaterials).filter(([, count]) => count > 0).map(([key, count]) => `${materialOffers[key][0]} ×${count} ${materialOffers[key][2]}`),
+        lootSummary()
+      ].filter(Boolean).join('; ') || 'không có'}. Bình máu do người chơi tự dùng bằng nút; nguyên liệu do hệ thống tiêu hao; chiến lợi phẩm chỉ được dùng, tặng hay đổi khi hành động của người chơi nêu ra.`,
       'Chỉ số hiển thị đã cộng hiệu ứng trang bị và kỹ năng; không cộng hai lần. Công pháp trốn chạy chỉ hỗ trợ thoát thân khi được kích hoạt, không bảo đảm thành công. Tu vi được hệ thống cộng một lần khi hết chương: 2,5% tu vi cần để lên cấp cộng phần của tâm pháp đang dùng (ma đạo chỉ góp ở lượt đủ điều kiện); hệ thống tự tính tu vi và chi phí, không tự bịa thay đổi số liệu.',
       'Danh sách trang bị, kỹ năng và túi đồ hiện tại là nguồn chính xác về sở hữu. Không sử dụng lại món đã bán, vứt bỏ hoặc kỹ năng đã quên chỉ vì chúng xuất hiện trong truyện trước đó.',
       'Chỉ sử dụng trang bị đang mặc và kỹ năng đang dùng. Trang bị đã tháo và kỹ năng đã tắt vẫn được sở hữu nhưng không có hiệu lực; không tự mặc lại hay bật lại thay người chơi.',
       `CHƯƠNG ĐANG KỂ: ${document.querySelector('.chapter span')?.textContent?.trim() || 'CHƯƠNG 01'}.`,
-      `MỤC TIÊU HIỆN TẠI: ${document.querySelector('.quest-card h3')?.textContent?.trim() || profile.goal || 'chưa rõ'} — ${document.querySelector('.quest-card p')?.textContent?.trim() || ''}`
+      formatJournalContext()
     ].join('\n');
   }
 
@@ -567,6 +690,8 @@
 
   const coherentProseRule = 'VIẾT CÓ NGHĨA VÀ ĐÚNG BỐI CẢNH: Mỗi câu phải rõ chủ thể, hành động và đối tượng; lời thoại phải có mục đích phù hợp tình huống. Địa danh, phe phái, chức danh phải nhất quán với thế giới và thời kỳ đã chọn. Không ghép tên tùy tiện thành địa danh hoặc tổ chức như "biên giới Mạnh", "Mạnh Tông" khi chưa được xác lập. Với nhân vật lịch sử, không tự đổi phe phái hoặc vai trò nếu người chơi chưa thiết lập lịch sử thay thế. Nếu chưa đủ dữ kiện, dùng mô tả địa điểm rõ ràng như "bìa rừng phía bắc doanh trại", không bịa tên như một sự thật đã biết. Địa danh hư cấu mới phải được giới thiệu quan hệ với nơi hiện tại và vai trò trong tình huống. Trước khi trả lời, rà lại tên riêng, ý nghĩa câu và sự liên kết giữa lời kể với lời thoại. Trong lời kể có thể dùng **tên nhân vật**, **thân phận**, **cảnh giới** để nhấn mạnh chọn lọc; không bọc cả đoạn hoặc dùng các kiểu Markdown khác.';
 
+  const lootRule = 'CHIẾN LỢI PHẨM (BẮT BUỘC): Sau phần truyện, viết thêm đúng một dòng cuối cùng, tách riêng, theo mẫu "[CHIẾN LỢI PHẨM] tên: số lượng đơn vị; tên: số lượng đơn vị" liệt kê những gì nhân vật người chơi thực sự thu được trong lượt này: vật liệu từ quái vật hay kẻ địch đã hạ, tiền, đồ được tặng hoặc nhặt. Số lượng và tên phải hợp với sự việc vừa kể; ví dụ hạ 2 con sói: "[CHIẾN LỢI PHẨM] thịt sói: 20 cân; da sói: 1 tấm; nanh sói: 3; vuốt sói: 5; thi thể động vật: 1; máu động vật: 5 phần". Thi thể còn nguyên ghi "thi thể động vật" hoặc "thi thể người"; máu hứng được ghi "máu động vật" hoặc "máu người"; độc thảo và oán phù ghi đúng tên đó; tiền ghi "tiền: 30 đồng". Không ghi trang bị, kỹ năng hay tu vi vào dòng này. Lượt không thu được gì thì ghi "[CHIẾN LỢI PHẨM] không". Không viết gì sau dòng này.';
+
   function buildSystemPrompt(profile) {
     return [
       'Ngươi là người dẫn truyện tương tác cho game tiên hiệp Vạn Giới Ký. Viết hoàn toàn bằng tiếng Việt tự nhiên, giàu hình ảnh và có nhịp kể cuốn hút; dùng từ cổ phong vừa phải, không dịch sát văn phong tiếng Anh.',
@@ -581,6 +706,7 @@
       narrationPerspectiveRule(profile),
       namedDialogueRule,
       coherentProseRule,
+      lootRule,
       'Chỉ xuất phần truyện có thể hiện cho người chơi. Không viết suy nghĩ nội bộ, phân tích, kế hoạch, lời dẫn meta, tiêu đề, đánh số đoạn; chỉ cho phép **cụm từ** để nhấn mạnh trong lời kể. Không lặp lại yêu cầu.',
       `Gán speaker theo người thực sự nói trong tình tiết. Lời của nhân vật chính phải ghi speaker="${profile.name}"; không dùng Lời, Lời nói hoặc đại từ làm tên NPC. Giữ suy nghĩ nội tâm trong lời kể.`,
       `HỒ SƠ NHÂN VẬT: ${profile.name}${profile.age ? `, ${profile.age} tuổi` : ''}; thân phận: ${profile.identity || 'chưa xác định'}; cảnh giới: ${profile.realm || 'chưa xác định'}.`,
@@ -639,7 +765,8 @@
       }, 600000);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
-      const opening = removeRepeatedPassages(normalizeDialogue(data.message?.content?.trim() || '', profile.name));
+      // The opening grants nothing; drop a loot line if the model adds one anyway.
+      const opening = removeRepeatedPassages(normalizeDialogue(extractLoot(data.message?.content?.trim() || '').text, profile.name));
       if (!opening) throw new Error('Model không trả về đoạn mở đầu.');
       setStatus('ready');
       help.textContent = `Đã tạo cảnh mở đầu bằng ${model}.`;
@@ -725,7 +852,7 @@
       `CÁC LƯỢT ĐÃ KỂ TRONG CHƯƠNG ${chapterState.chapterNumber} (không kể lại):\n${formatCurrentChapterContext()}`,
       `HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI:\n${action}`,
       surprise ? 'Hãy thêm một tình tiết bất ngờ hợp lý, có dấu hiệu gieo trước và không giải quyết mọi việc quá dễ dàng.' : '',
-      'YÊU CẦU LƯỢT NÀY: Tiếp tục liền mạch từ câu cuối cùng trong diễn biến gần đây. Thực hiện đúng hành động người chơi vừa nhập. Nếu đó là câu hỏi, hãy để đúng người được hỏi trả lời chính xác câu hỏi trước khi mở rộng cảnh. Không đưa thêm sự kiện ngoài mạch.'
+      'YÊU CẦU LƯỢT NÀY: Tiếp tục liền mạch từ câu cuối cùng trong diễn biến gần đây. Thực hiện đúng hành động người chơi vừa nhập. Nếu đó là câu hỏi, hãy để đúng người được hỏi trả lời chính xác câu hỏi trước khi mở rộng cảnh. Không đưa thêm sự kiện ngoài mạch. Kết thúc bằng dòng [CHIẾN LỢI PHẨM] theo đúng mẫu.'
     ].filter(Boolean).join('\n\n');
 
     turnButton.disabled = true;
@@ -759,13 +886,16 @@
         ...chapterState.turns.map(turn => turn.narrative),
         ...[...story.querySelectorAll('.narration, .story-entry dialogue')].map(node => node.textContent.trim())
       ];
-      const answer = removeRepeatedPassages(normalizeDialogue(data.message?.content?.trim() || '', profile.name), priorStory);
+      const loot = extractLoot(data.message?.content?.trim() || '');
+      const answer = removeRepeatedPassages(normalizeDialogue(loot.text, profile.name), priorStory);
       if (!answer) throw new Error('Model không trả về phần truyện.');
 
       answer.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean)
         .forEach(part => appendNarrationWithDialogue(part, profile.name));
       removeDuplicateStoryEntries();
       completeProgressionTurn();
+      applyLoot(loot.entries).forEach(appendTurnReport);
+      await updateJourney(model, action, answer);
       const chapterClosed = await recordTurn(action, answer, model);
       inputs.innerHTML = '';
       document.querySelector('#surprise-event').checked = false;
@@ -788,4 +918,5 @@
 
   checkButton.addEventListener('click', checkConnection);
   turnButton.addEventListener('click', playAI);
+  renderJourney();
 })();

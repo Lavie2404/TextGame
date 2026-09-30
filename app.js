@@ -1,5 +1,6 @@
-const equipment=[['Thanh Phong Kiếm','Huyền phẩm','⚔',true,'weapon'],['Hộ Tâm Giáp','Hoàng phẩm','♢',true,'clothing']];
-const skills=[['Ngự Phong Quyết','Huyền phẩm','〽',true,'speed'],['Tụ Khí Thuật','Phàm phẩm','☯',true,'righteous']];
+// Khởi đầu tay trắng: trang bị và kỹ năng chỉ có được qua cửa hàng, chiến lợi phẩm hoặc Tùy chỉnh.
+const equipment=[];
+const skills=[];
 const rarity={ 'Phàm phẩm':0,'Hoàng phẩm':1,'Huyền phẩm':2,'Địa phẩm':3,'Thiên phẩm':4,'Tiên phẩm':5 };
 let inventoryCoins=0;
 const inputArea=document.querySelector('#inputs'),story=document.querySelector('#story');
@@ -71,7 +72,10 @@ document.querySelector('#skills-list').addEventListener('click',event=>{
   renderItems();status.textContent=`Đã kích hoạt ${item[0]} cho lượt kế tiếp. ${burstCostText(item[4])}. Nếu AI lỗi, hiệu lực vẫn được giữ.`;
 });
 document.querySelector('#consumable-list').addEventListener('click',event=>{
-  const button=event.target.closest('[data-use-potion]');if(!button||document.querySelector('#ai-turn').disabled)return;
+  if(document.querySelector('#ai-turn').disabled)return;
+  const discard=event.target.closest('[data-discard-loot]');
+  if(discard){delete lootItems[discard.dataset.discardLoot];renderItems();document.querySelector('#bag-status').textContent=`Đã vứt bỏ ${discard.dataset.discardLoot}.`;return}
+  const button=event.target.closest('[data-use-potion]');if(!button)return;
   const message=usePotion(button.dataset.usePotion);renderItems();document.querySelector('#bag-status').textContent=message;
 });
 function renderItemKinds(){
@@ -83,14 +87,13 @@ function renderSchoolChoice(){document.querySelector('#item-school-label').hidde
 document.querySelector('#item-school').innerHTML=Object.entries(demonicSchools).map(([key,data])=>`<option value="${key}">${data.label}</option>`).join('');
 document.querySelector('#item-kind').addEventListener('change',renderSchoolChoice);
 document.querySelector('#item-type').addEventListener('change',renderItemKinds);renderItemKinds();
-document.querySelector('#occult-panel').addEventListener('click',event=>{
+document.querySelector('#demonic-panel').addEventListener('click',event=>{
   if(document.querySelector('#ai-turn').disabled)return;
-  const purchase=event.target.closest('[data-buy-material]'),raise=event.target.closest('[data-raise]');
-  if(purchase){const key=purchase.dataset.buyMaterial,offer=materialOffers[key];if(!offer||inventoryCoins<offer[1])return;inventoryCoins-=offer[1];occultMaterials[key]++;renderItems();document.querySelector('#shop-status').textContent=`Đã mua ${offer[0]}.`}
-  if(raise){const message=raiseServant(raise.dataset.raise);renderItems();document.querySelector('#shop-status').textContent=message}
+  const raise=event.target.closest('[data-raise]');
+  if(raise){const message=raiseServant(raise.dataset.raise);renderItems();document.querySelector('#bag-status').textContent=message}
 });
-document.querySelector('#occult-panel').addEventListener('change',event=>{
-  if(document.querySelector('#ai-turn').disabled){renderOccultPanel();return}
+document.querySelector('#demonic-panel').addEventListener('change',event=>{
+  if(document.querySelector('#ai-turn').disabled){renderDemonicPanel();return}
   if(event.target.id==='shadow-retreat')shadowRetreat=event.target.checked;
   if(event.target.matches('[data-servant-job]')){const servant=servants.find(s=>s.id===Number(event.target.dataset.servantJob));if(servant&&['rest','work','gather'].includes(event.target.value))servant.job=event.target.value}
 });
@@ -121,8 +124,8 @@ document.querySelector('#origin-form').addEventListener('submit',async event=>{
   try{
     if(typeof window.generateOpeningText!=='function')throw new Error('Không tải được mô-đun AI. Hãy tải lại trang.');
     const opening=await window.generateOpeningText({name,age,identity,level,realm,setting,goal,allowNsfw,worldName});
-    window.resetChapterMemory?.();resetNpcProfiles();[...equipment,...skills].forEach(item=>{item[6]??=level});baseStats=rollCharacterStats(level);pendingBurst=null;burstFatigue=null;chapterMindPercent=0;renderProgress(level,0);currentHealth=null;Object.keys(potions).forEach(key=>delete potions[key]);renderItems();
-    renderRealmPanels(realm,level);document.querySelector('#player-name').textContent=name;document.querySelector('#player-realm').textContent=`${realm} · Cấp ${level}`;document.querySelector('#custom-name').value=name;document.querySelector('#custom-level').value=level;document.querySelector('#custom-realm').value=realm;document.querySelector('.chapter strong').textContent=`${worldName} · ${identity}`;document.querySelector('.quest-card h3').textContent=goal||'Bắt đầu hành trình';window.rerollShopStock?.();
+    window.resetChapterMemory?.();resetNpcProfiles();resetDemonicState();resetLoot();equipment.length=0;skills.length=0;baseStats=rollCharacterStats(level);pendingBurst=null;burstFatigue=null;chapterMindPercent=0;renderProgress(level,0);currentHealth=null;Object.keys(potions).forEach(key=>delete potions[key]);renderItems();
+    renderRealmPanels(realm,level);document.querySelector('#player-name').textContent=name;document.querySelector('#player-realm').textContent=`${realm} · Cấp ${level}`;document.querySelector('#custom-name').value=name;document.querySelector('#custom-level').value=level;document.querySelector('#custom-realm').value=realm;document.querySelector('.chapter strong').textContent=`${worldName} · ${identity}`;window.setJourneyGoal?.(goal||'Bắt đầu hành trình');window.rerollShopStock?.();
     story.replaceChildren();
     const chapterLabel=document.createElement('div');chapterLabel.className='chapter-label';
     const leftRule=document.createElement('span'),rightRule=document.createElement('span');chapterLabel.append(leftRule,document.createTextNode('Khai mở thiên mệnh'),rightRule);story.append(chapterLabel);

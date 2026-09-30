@@ -1,12 +1,4 @@
 const itemPriceWeights = {weapon:1,shoes:2,clothing:3,accessory:4,mount:5,attack:1,speed:2,defense:3,burstAttack:4,burstDefense:4,burstSpeed:4,escape:4,righteous:5,demonic:5,recovery:5,potion:1};
-const cultivationBlood = {animal:0,human:0};
-function bloodAvailable(){return cultivationBlood.animal+cultivationBlood.human}
-function consumeCultivationBlood(amount){
-  if(bloodAvailable()<amount)return false;
-  const animal=Math.min(cultivationBlood.animal,amount);
-  cultivationBlood.animal-=animal;cultivationBlood.human-=amount-animal;
-  return true;
-}
 const itemKinds = {
   weapon: ['Trang bị','Vũ khí','Công kích'], clothing: ['Trang bị','Y phục','Phòng ngự'],
   shoes: ['Trang bị','Giày','Tốc độ'], accessory: ['Trang bị','Phụ kiện','Máu'], mount: ['Trang bị','Tọa kỵ','Toàn bộ chỉ số'],
@@ -162,7 +154,10 @@ function usePotion(key){
 function renderConsumables(){
   const list=document.querySelector('#consumable-list');if(!list)return;
   const owned=Object.entries(potions).filter(([,count])=>count>0);
-  list.innerHTML=owned.map(([key,count])=>{const potion=potionFromKey(key),grade=potion[1];return `<div class="item"><span class="item-icon">⚱</span><span class="item-details"><b>Bình máu ×${count}</b><small class="item-grade rarity-${rarity[grade]}">${escapeHtml(grade)} · Cấp ${itemLevel(potion)}</small><small class="item-effect">${escapeHtml(potionDescription(potion))}</small></span><span class="item-actions"><button type="button" class="item-toggle" data-use-potion="${escapeHtml(key)}" aria-label="Dùng Bình máu ${escapeHtml(grade)} cấp ${itemLevel(potion)}">Dùng</button></span></div>`}).join('')||'<p class="inventory-empty">Chưa có vật phẩm. Mua Bình máu ở Cửa hàng.</p>';
+  const potionRows=owned.map(([key,count])=>{const potion=potionFromKey(key),grade=potion[1];return `<div class="item"><span class="item-icon">⚱</span><span class="item-details"><b>Bình máu ×${count}</b><small class="item-grade rarity-${rarity[grade]}">${escapeHtml(grade)} · Cấp ${itemLevel(potion)}</small><small class="item-effect">${escapeHtml(potionDescription(potion))}</small></span><span class="item-actions"><button type="button" class="item-toggle" data-use-potion="${escapeHtml(key)}" aria-label="Dùng Bình máu ${escapeHtml(grade)} cấp ${itemLevel(potion)}">Dùng</button></span></div>`});
+  // Demonic materials are consumed automatically, so they are listed without a button.
+  const materialRows=Object.entries(occultMaterials).filter(([,count])=>count>0).map(([key,count])=>`<div class="item"><span class="item-icon">☗</span><span class="item-details"><b>${escapeHtml(materialOffers[key][0])} ×${count}</b><small class="item-grade">Nguyên liệu</small><small class="item-effect">${escapeHtml(materialDescription(key))}</small></span></div>`);
+  list.innerHTML=[...potionRows,...materialRows,...lootRows()].join('')||'<p class="inventory-empty">Chưa có vật phẩm. Mua Bình máu và nguyên liệu ở tab Vật phẩm của Cửa hàng; chiến lợi phẩm trong truyện cũng nằm ở đây.</p>';
 }
 
 // End of chapter: without combat, recover 10% of max HP plus the active recovery mind art's bonus.
@@ -187,9 +182,7 @@ function payBurstActivation(item){
 function renderCharacterStats(){
   const stats=effectiveStats();
   Object.entries(stats).forEach(([key,value])=>{const el=document.getElementById(key);if(el)el.textContent=key==='health'?`${healthNow().toLocaleString('vi-VN')} / ${value.toLocaleString('vi-VN')}`:value});
-  const blood=document.getElementById('cultivation-blood');
-  renderOccultPanel();renderConsumables();
-  if(blood)blood.textContent=`Máu động vật: ${cultivationBlood.animal} phần · Máu người: ${cultivationBlood.human} phần`;
+  renderDemonicPanel();renderConsumables();
 }
 // Tu vi needed to go from `level` to the next: level × 100, × 1,5 for every realm already passed
 // (level 10: 1.000, level 11: 1.650, level 21: 4.730). Leftover tu vi carries into the next level.
