@@ -136,7 +136,8 @@ function gradeTierForRealm(realmIndex){
   const count=Math.max(worldRealms.length,1);
   return Math.min(GRADE_COUNT-1,count<GRADE_COUNT?realmIndex:Math.floor(realmIndex*GRADE_COUNT/count));
 }
-function playerLevel(){return Number(document.querySelector('#player-realm')?.textContent.match(/Cấp\s+(\d+)/)?.[1])||1}
+// Level 0 (a mortal) is a real level; only a missing label falls back to 1.
+function playerLevel(){const level=document.querySelector('#player-realm')?.textContent.match(/Cấp\s+(\d+)/)?.[1];return level===undefined?1:Number(level)}
 // Bình máu are stacked by grade and level ("Địa phẩm@65" -> count) and heal level × 1,2 × 1,5^grade × 10 HP.
 const potions={};
 function potionKey(grade,level){return `${grade}@${level}`}
@@ -186,10 +187,11 @@ function renderCharacterStats(){
 }
 // Tu vi needed to go from `level` to the next: level × 100, × 1,5 for every realm already passed
 // (level 10: 1.000, level 11: 1.650, level 21: 4.730). Leftover tu vi carries into the next level.
-function xpToNextLevel(level){return Math.round(Math.max(1,level)*100*GRADE_COEFFICIENT**Math.max(0,Math.floor((level-1)/10))/10)*10}
+// A mortal at level 0 needs 50 to take the first step to level 1.
+function xpToNextLevel(level){return level<1?50:Math.round(level*100*GRADE_COEFFICIENT**Math.floor((level-1)/10)/10)*10}
 function currentXp(){return Math.max(0,Number(document.querySelector('#custom-xp').value)||0)}
 function renderProgress(level,xp){
-  const need=xpToNextLevel(level),realm=getRealmForLevel(level);
+  const need=xpToNextLevel(level),realm=realmLabelForLevel(level);
   const xpInput=document.querySelector('#custom-xp');xpInput.value=xp;xpInput.max=need;
   document.querySelector('#custom-level').value=level;
   document.querySelector('#xp-label').textContent=`${xp.toLocaleString('vi-VN')} / ${need.toLocaleString('vi-VN')}`;
@@ -213,7 +215,7 @@ function awardChapterCultivation(){
     xp-=xpToNextLevel(level);level++;
     // Max HP gained from a level-up is also added to current HP.
     const {gain:levelGain,realmBonus}=rollLevelUp(level);
-    addStats(baseStats,levelGain);currentHealth+=levelGain.health;report.push(`Lên cấp ${level}: ${formatStatGain(levelGain)}.`);
+    addStats(baseStats,levelGain);currentHealth+=levelGain.health;report.push(`${level===1?`Bắt đầu tu luyện, bước vào ${getRealmForLevel(1)}. `:''}Lên cấp ${level}: ${formatStatGain(levelGain)}.`);
     if(realmBonus){addStats(baseStats,realmBonus);currentHealth+=realmBonus.health;report.push(`Đột phá ${getRealmForLevel(level)}, thưởng: ${formatStatGain(realmBonus)}.`)}
   }
   renderProgress(level,Math.min(xp,xpToNextLevel(level)));renderItems();

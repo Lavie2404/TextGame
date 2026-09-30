@@ -87,8 +87,8 @@
       // Mature romance is enabled by default, including for older setup files.
       worldRealms.length = 0;
       settings.realms.forEach(realm => worldRealms.push(realm));
-      const level = Number(settings.level) || 1;
-      renderRealmPanels(getRealmForLevel(level), level);
+      const level = Number(settings.level) || 0;
+      renderRealmPanels(realmLabelForLevel(level), level);
       report('Đã tải thiết lập. Bạn có thể chỉnh sửa hoặc bắt đầu hành trình.');
     } catch (error) {
       report(error instanceof SyntaxError ? 'Không thể tải: file JSON không hợp lệ.' : `Không thể tải: ${error.message}`, true);

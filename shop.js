@@ -62,7 +62,8 @@ function shopCatalog(stock) {
   const list = document.querySelector('#shop-list');
   const status = document.querySelector('#shop-status');
   // Read the applied character level, never an unsaved customization field.
-  const currentLevel = () => Number(document.querySelector('#player-realm').textContent.match(/Cấp\s+(\d+)/u)?.[1]) || 0;
+  // null until a journey has started; a mortal at level 0 shops like a level 1 character.
+  const currentLevel = () => { const level = document.querySelector('#player-realm').textContent.match(/Cấp\s+(\d+)/u)?.[1]; return level === undefined ? null : Math.max(1, Number(level)); };
   const owned = product => product.type !== 'item' && (product.type === 'equipment' ? equipment : skills)
     .some(item => item[0] === product.name && item[1] === product.grade && item[6] === product.level);
   const asItem = product => [product.name,product.grade,product.icon,false,product.kind,product.school,product.level];
