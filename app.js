@@ -111,7 +111,14 @@ document.querySelector('#open-customize').onclick=()=>{
   document.querySelector('#custom-status').textContent='';
   modal.classList.add('open');
 };
-document.querySelector('#custom-level').addEventListener('input',showCustomRealm);document.querySelector('#close-modal').onclick=()=>modal.classList.remove('open');modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});
+document.querySelector('#custom-level').addEventListener('input',showCustomRealm);
+// Clicking or tabbing into a number field selects its old value, so typing replaces it outright.
+function selectOnFocus(input){
+  input.addEventListener('focus',()=>input.select());
+  // The mouseup that ends the focusing click would otherwise drop the selection.
+  input.addEventListener('mousedown',event=>{if(document.activeElement!==input){event.preventDefault();input.focus()}});
+}
+['#custom-level',...customStatKeys.map(key=>`#custom-${key}`),'#origin-realm'].forEach(selector=>selectOnFocus(document.querySelector(selector)));document.querySelector('#close-modal').onclick=()=>modal.classList.remove('open');modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});
 const settingsModal=document.querySelector('#settings-modal');document.querySelector('#open-settings').onclick=()=>settingsModal.classList.add('open');document.querySelector('#close-settings').onclick=()=>settingsModal.classList.remove('open');settingsModal.addEventListener('click',e=>{if(e.target===settingsModal)settingsModal.classList.remove('open')});
 document.querySelector('#save-custom').onclick=()=>{
   const name=document.querySelector('#custom-name').value.trim()||'Nhân vật vô danh',level=showCustomRealm();

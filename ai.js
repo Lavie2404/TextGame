@@ -458,7 +458,8 @@
   function addParagraph(text, className = 'narration') {
     const paragraph = document.createElement('p');
     paragraph.className = className;
-    appendEmphasized(paragraph, text);
+    // A paragraph never starts in lower case, even when it continues a sentence cut by a speech bubble.
+    appendEmphasized(paragraph, text.replace(/^((?:\*\*|\s)*)(\p{Ll})/u, (whole, lead, letter) => lead + letter.toLocaleUpperCase('vi')));
     story.append(paragraph);
   }
 
@@ -510,6 +511,58 @@
     }
     const trailing = text.slice(cursor).replace(/<\/?dialogue\b[^>]*>/gi, '').trim();
     if (trailing) addParagraph(trailing);
+  }
+
+  // Who a capitalised name refers to, judged by the word right before it: "nàng Lữ Thanh Tuyền" is a woman,
+  // "kinh thành Gia Cát" is a place. Used to resolve "nàng hỏi" to the right speaker and to bold character names.
+  const NAME_MARKERS = {
+    female: ['nàng', 'cô nương', 'cô gái', 'thiếu nữ', 'tiểu thư', 'phu nhân', 'cô', 'bà', 'chị', 'sư muội', 'sư tỷ', 'công chúa', 'nữ hiệp', 'nha hoàn', 'mỹ nhân'],
+    male: ['hắn', 'chàng', 'gã', 'lão', 'ông', 'cậu', 'công tử', 'thiếu niên', 'tướng quân', 'sư huynh', 'sư đệ', 'đại hiệp', 'tráng sĩ', 'thừa tướng'],
+    person: ['tên là', 'tên gọi là', 'gọi là', 'tự xưng là', 'tự xưng', 'người tên', 'kẻ tên', 'trưởng lão', 'sư phụ', 'đạo hữu', 'tiền bối', 'huynh', 'muội'],
+    place: ['kinh thành', 'thành', 'núi', 'sông', 'huyện', 'quận', 'châu', 'làng', 'thôn', 'trấn', 'phủ', 'nước', 'đất', 'vùng', 'miền', 'cõi', 'đảo', 'hồ', 'rừng', 'cung', 'điện', 'lầu', 'quán', 'chùa', 'ải', 'bến', 'doanh trại', 'thung lũng', 'đại lục', 'đế quốc', 'vương quốc', 'tông môn', 'môn phái']
+  };
+  const markerKind = new Map(Object.entries(NAME_MARKERS).flatMap(([kind, words]) => words.map(word => [word, kind])));
+  const markerBefore = new RegExp(`(?:^|[^\\p{L}])(${[...markerKind.keys()].sort((a, b) => b.length - a.length).join('|')})\\s+$`, 'iu');
+  // Every multi-word capitalised name in the text with the kind its marker gives it ('' when there is none).
+  function nameMentions(text) {
+    const mentions = [];
+    for (const match of text.matchAll(/[\p{Lu}][\p{L}]+(?:[ \t]+[\p{Lu}][\p{L}]+){1,3}/gu)) {
+      let name = match[0], lead = text.slice(Math.max(0, match.index - 24), match.index);
+      // A sentence that opens with the marker capitalises it too: "Nàng Lữ Thanh Tuyền".
+      const tokens = name.split(/[ \t]+/), first = tokens[0].toLocaleLowerCase('vi');
+      if (tokens.length > 2 && markerKind.has(first)) { lead = `${first} `; name = tokens.slice(1).join(' '); }
+      mentions.push({ name, index: match.index, kind: markerKind.get(lead.match(markerBefore)?.[1].toLocaleLowerCase('vi')) || '' });
+    }
+    return mentions;
+  }
+  // A name is a place when some mention marks it as one and none marks it as a person.
+  function placeNames(mentions) {
+    const kinds = new Map();
+    mentions.forEach(({ name, kind }) => kinds.set(name, (kinds.get(name) || new Set()).add(kind)));
+    return new Set([...kinds].filter(([, seen]) => seen.has('place') && !['female', 'male', 'person'].some(kind => seen.has(kind))).map(([name]) => name));
+  }
+  // Character names in narration are shown in **bold**. The model is asked to do it; this catches what it misses:
+  // speakers, known NPCs, the player, and names introduced with a person marker. Dialogue text is left alone.
+  function emphasizeNames(text, playerName) {
+    const plain = text.replace(/<[^>]*>/g, ' ').replace(/\*\*/g, '');
+    const mentions = nameMentions(plain), places = placeNames(mentions);
+    const names = new Set([
+      playerName,
+      ...[...text.matchAll(/speaker\s*=\s*(["'])(.*?)\1/gi)].map(match => match[2].trim()),
+      ...[...story.querySelectorAll('.story-entry .speaker')].map(node => node.firstChild?.textContent.trim()),
+      ...[...npcProfiles.values()].flatMap(profile => [profile.speaker, profile.fullName]),
+      ...mentions.filter(mention => ['female', 'male', 'person'].includes(mention.kind)).map(mention => mention.name)
+    ].filter(name => name && name.length > 1 && !places.has(name) && !/^(?:Chưa rõ người nói|Không rõ|NPC)$/iu.test(name)));
+    if (!names.size) return text;
+    const escaped = [...names].sort((a, b) => b.length - a.length).map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const pattern = new RegExp(`(?<![\\p{L}\\p{N}])(${escaped.join('|')})(?![\\p{L}\\p{N}])`, 'gu');
+    return text.split(/(<dialogue\b[^>]*>[\s\S]*?<\/dialogue\s*>)/i).map(part => /^<dialogue\b/i.test(part) ? part
+      : part.split(/(\*\*[^*\n]+\*\*|<[^>]*>)/).map(piece => /^(\*\*|<)/.test(piece) ? piece : piece.replace(pattern, '**$1**')).join('')).join('');
+  }
+  // Narration that carries on after a speech bubble starts a new paragraph, so it starts with a capital:
+  // </dialogue> nàng hỏi, giọng run run. → Nàng hỏi, giọng run run.
+  function capitalizeAfterDialogue(text) {
+    return text.replace(/(<\/dialogue\s*>)[ \t]*[,;—–-]*[ \t]*(\p{Ll})/gu, (whole, tag, letter) => `${tag} ${letter.toLocaleUpperCase('vi')}`);
   }
 
   // Only <dialogue> tags are speech when rendering. Resolve missing or vague
@@ -569,15 +622,18 @@
       if (!subject) return '';
       if (/^(?:Ngươi|Bạn|Nhân vật chính)$/iu.test(subject)) return playerName;
       if (!new RegExp(`^${pronoun}$`, 'iu').test(subject)) return subject;
-      // Resolve third-person pronouns to the most recent named character, not
-      // to the first name mentioned later in the next sentence.
-      const mentions = [...before.matchAll(/[\p{Lu}][\p{L}]+(?:[ \t]+[\p{Lu}][\p{L}]+){1,3}/gu)];
-      const lastName = mentions.at(-1);
-      const playerAt = playerName ? before.lastIndexOf(playerName) : -1;
-      // A third-person pronoun describes an NPC in second-person narration.
-      // Do not turn "Nàng" into the player just because their name occurs nearby.
-      if (lastName?.[0] === playerName || playerAt > (lastName?.index ?? -1)) return '';
-      return lastName?.[0] || '';
+      return recentPerson(before, /nàng/iu.test(subject) ? 'female' : 'male');
+    }
+    // Resolve a third-person pronoun to the most recent named character before the utterance, never a place
+    // ("kinh thành Gia Cát") and never the player, who is "ngươi" in second-person narration. A character
+    // introduced with a matching marker ("nàng Lữ Thanh Tuyền" for "nàng hỏi") wins over a more recent bare name.
+    function recentPerson(before, gender = '') {
+      const mentions = nameMentions(before), places = placeNames(mentions);
+      const people = mentions.filter(mention => mention.name !== playerName && !places.has(mention.name));
+      const opposite = gender === 'female' ? 'male' : 'female';
+      const genderOf = name => people.find(mention => mention.name === name && ['female', 'male'].includes(mention.kind))?.kind || '';
+      const matching = gender ? people.filter(mention => genderOf(mention.name) === gender) : [];
+      return (matching.at(-1) || people.filter(mention => genderOf(mention.name) !== opposite).at(-1))?.name || '';
     }
     let output = '';
     let cursor = 0;
@@ -617,10 +673,20 @@
       else if (!declared || invalidNames.test(declared) || new RegExp(`^${pronoun}$`, 'iu').test(declared)) {
         const resolved = requireSpeaker(inferSpeaker(text.slice(Math.max(0, match.index - 1200), match.index), text.slice(dialoguePattern.lastIndex, dialoguePattern.lastIndex + 180)), declared);
         output += `<dialogue speaker="${resolved}">${content}</dialogue>`;
-      } else { output += match[0];if(declared!==playerName)lastNpc=declared; }
+      } else {
+        // The model sometimes tags a place it has just mentioned as the speaker ("kinh thành Gia Cát" →
+        // speaker="Gia Cát"); give the line to whoever the narration beside it points at instead.
+        const before = text.slice(Math.max(0, match.index - 1200), match.index).replace(/\*\*/g, '');
+        const person = declared !== playerName && placeNames(nameMentions(before)).has(declared)
+          ? inferSpeaker(before, text.slice(dialoguePattern.lastIndex, dialoguePattern.lastIndex + 180)) || recentPerson(before)
+          : '';
+        const speaker = person || declared;
+        output += person ? `<dialogue speaker="${speaker}">${content}</dialogue>` : match[0];
+        if (speaker !== playerName) lastNpc = speaker;
+      }
       cursor = dialoguePattern.lastIndex;
     }
-    return emphasizeQuotes(output + text.slice(cursor));
+    return emphasizeNames(capitalizeAfterDialogue(emphasizeQuotes(output + text.slice(cursor))), playerName);
   }
 
   window.renderNarrativeWithDialogue = (text, playerName) => {
@@ -688,7 +754,7 @@
 
   const namedDialogueRule = 'NPC chỉ được nói khi có tên riêng rõ ràng. Giới thiệu tên NPC trong lời kể trước câu thoại đầu tiên, dùng nhất quán tên đó trong speaker. Không dùng NPC, Chưa rõ người nói, Người lạ, Cô gái, Nàng hoặc chức danh chung làm tên. Với nhân vật hư cấu mới, đặt tên phù hợp thời kỳ và thế giới; với nhân vật đã có tên, giữ nguyên tên. Nếu NPC chưa có tên, tự sáng tạo ngay một tên cổ trang phù hợp như Lâm Vân Phong hoặc Tô Thanh Dao, giới thiệu tên và dùng nhất quán cho nhân vật đó. Không dừng truyện, không yêu cầu người chơi cung cấp tên. Không gán lời của NPC sang người chơi.';
 
-  const coherentProseRule = 'VIẾT CÓ NGHĨA VÀ ĐÚNG BỐI CẢNH: Mỗi câu phải rõ chủ thể, hành động và đối tượng; lời thoại phải có mục đích phù hợp tình huống. Địa danh, phe phái, chức danh phải nhất quán với thế giới và thời kỳ đã chọn. Không ghép tên tùy tiện thành địa danh hoặc tổ chức như "biên giới Mạnh", "Mạnh Tông" khi chưa được xác lập. Với nhân vật lịch sử, không tự đổi phe phái hoặc vai trò nếu người chơi chưa thiết lập lịch sử thay thế. Nếu chưa đủ dữ kiện, dùng mô tả địa điểm rõ ràng như "bìa rừng phía bắc doanh trại", không bịa tên như một sự thật đã biết. Địa danh hư cấu mới phải được giới thiệu quan hệ với nơi hiện tại và vai trò trong tình huống. Trước khi trả lời, rà lại tên riêng, ý nghĩa câu và sự liên kết giữa lời kể với lời thoại. Trong lời kể có thể dùng **tên nhân vật**, **thân phận**, **cảnh giới** để nhấn mạnh chọn lọc; không bọc cả đoạn hoặc dùng các kiểu Markdown khác.';
+  const coherentProseRule = 'VIẾT CÓ NGHĨA VÀ ĐÚNG BỐI CẢNH: Mỗi câu phải rõ chủ thể, hành động và đối tượng; lời thoại phải có mục đích phù hợp tình huống. Địa danh, phe phái, chức danh phải nhất quán với thế giới và thời kỳ đã chọn. Không ghép tên tùy tiện thành địa danh hoặc tổ chức như "biên giới Mạnh", "Mạnh Tông" khi chưa được xác lập. Với nhân vật lịch sử, không tự đổi phe phái hoặc vai trò nếu người chơi chưa thiết lập lịch sử thay thế. Nếu chưa đủ dữ kiện, dùng mô tả địa điểm rõ ràng như "bìa rừng phía bắc doanh trại", không bịa tên như một sự thật đã biết. Địa danh hư cấu mới phải được giới thiệu quan hệ với nơi hiện tại và vai trò trong tình huống. Trước khi trả lời, rà lại tên riêng, ý nghĩa câu và sự liên kết giữa lời kể với lời thoại. Trong lời kể, mọi tên nhân vật đều viết trong cặp **...** mỗi lần xuất hiện (ví dụ: **Lâm Tuyết** khẽ gật đầu); có thể dùng thêm **thân phận**, **cảnh giới** để nhấn mạnh chọn lọc; không bọc cả đoạn hoặc dùng các kiểu Markdown khác. Người nói trong thẻ thoại phải là chính nhân vật vừa được kể là đang nói, không lấy địa danh hay tên người khác vừa nhắc tới làm speaker.';
 
   const hanVietRule = 'TÊN RIÊNG PHẢI LÀ ÂM HÁN VIỆT: Mọi tên người, địa danh, tông môn, chức danh, công pháp và thuật ngữ gốc Trung Hoa đều viết bằng âm Hán Việt có dấu tiếng Việt, không viết bính âm (pinyin) và không kèm chữ Hán. Đúng: Tào Tháo, Lưu Bị, Gia Cát Lượng, Hứa Xương. Sai: Cao Cao, Liu Bei, Zhuge Liang, Xuchang, hoặc tên mang dấu thanh bính âm như Wáng Hào, Zhāng Wěi. Các tên này chỉ minh họa cách viết, không tự đưa vào truyện. Điều này áp dụng cho cả thuộc tính speaker trong thẻ thoại và mọi tên trong lời kể. Nếu bối cảnh là tác phẩm hay lịch sử Trung Hoa, dùng đúng tên Hán Việt quen thuộc với độc giả Việt Nam; nhân vật hư cấu mới cũng đặt tên Hán Việt. Trước khi trả lời, rà lại mọi tên riêng và sửa hết dạng bính âm.';
 
