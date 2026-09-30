@@ -1,19 +1,22 @@
-// Loot: every AI turn ends with one line "[CHIẾN LỢI PHẨM] tên: số lượng đơn vị; …" (or "… không").
+// Loot: every AI turn ends with "[CHIẾN LỢI PHẨM] tên: số lượng đơn vị; …" (or "… không") listing what defeated
+// creatures and enemies may yield, optionally preceded by "[NHẬN ĐƯỢC] …" for things given, paid or bought in the story.
 // Coins and demonic materials go to their own counters; everything else is kept here as generic loot.
-const LOOT_MARKER=/^\W{0,3}\s*CHIẾN LỢI PHẨM\W{0,3}\s*(.*)$/imu;
+const LOOT_MARKER=/^\W{0,3}\s*(CHIẾN LỢI PHẨM|NHẬN ĐƯỢC)\W{0,3}\s*(.*)$/imu;
 const lootItems={};// name -> {count, unit}
 function resetLoot(){Object.keys(lootItems).forEach(name=>delete lootItems[name])}
-// Splits the loot line off a story reply; returns the story without it plus the parsed entries.
+// Splits the loot lines off a story reply; returns the story without them plus the parsed entries.
+// Entries from [NHẬN ĐƯỢC] are marked certain: they skip the drop roll.
 function extractLoot(text){
-  const lines=text.split('\n');
-  let entries=[],found=false;
+  const lines=text.split('\n'),seen=new Set();
+  let entries=[];
   for(let i=lines.length-1;i>=0;i--){
     const match=lines[i].match(LOOT_MARKER);
     if(!match)continue;
-    if(!found){entries=parseLootLine(match[1]);found=true}
+    const certain=/NHẬN/iu.test(match[1]);
+    if(!seen.has(certain)){entries=[...parseLootLine(match[2]).map(entry=>({...entry,certain})),...entries];seen.add(certain)}
     lines.splice(i,1);
   }
-  return {text:lines.join('\n').trim(),entries,found};
+  return {text:lines.join('\n').trim(),entries,found:seen.size>0};
 }
 function parseLootLine(line){
   const cleaned=line.replace(/\*+/g,'').trim();
@@ -38,21 +41,48 @@ function lootMaterialKey(name){
   if(/oán phù/u.test(lower))return 'talisman';
   return null;
 }
+// Blood and corpses (the materials no shop sells) are gathered only while the active demonic tâm pháp is the school
+// that cultivates with them: Huyết công takes blood and leaves corpses, Tử Linh thuật the reverse, everyone else neither.
+function lootCollects(key){
+  if(materialSold(key))return true;
+  const art=activeDemonic();
+  return !!art&&demonicSchool(art).materials.includes(key);
+}
+// Beast parts always drop from a slain beast; people yield none, so a "… người" part is ignored.
+const BODY_PART=/^(thịt|da|nanh|vuốt|lông|xương|sừng|móng|gân|răng|vảy|đuôi|cánh|ngà|gạc|bờm|mai|mật)(\s|$)/u;
+// Everything else a defeated enemy might carry only drops by chance; the branch's own blood or corpses always do.
+const DROP_CHANCE={coins:.5,poison:.3,talisman:.2,other:.3};
+function lootDropChance(name,key){
+  if(BODY_PART.test(name.toLowerCase()))return /người/u.test(name.toLowerCase())?0:1;
+  if(key&&key!=='coins'&&!materialSold(key))return 1;
+  return DROP_CHANCE[key||'other'];
+}
+// The amount the story lists for a drop is its maximum; what actually drops is random between half of it and all of it.
+function rollDropAmount(listed){const least=Math.max(1,Math.ceil(listed/2));return least+Math.floor(Math.random()*(listed-least+1))}
 // Adds loot to the inventory and returns report lines.
 function applyLoot(entries){
   if(!entries.length)return [];
-  const gained=[];
-  entries.forEach(({name,count,unit})=>{
+  const gained=[],missed=[];
+  entries.forEach(({name,count:listed,unit,certain})=>{
     const key=lootMaterialKey(name);
+    if(key&&key!=='coins'&&!lootCollects(key))return;
+    const label=key==='coins'?'tiền':key?materialOffers[key][0]:name.charAt(0).toUpperCase()+name.slice(1);
+    const chance=certain?1:lootDropChance(name,key);
+    if(chance<=0)return;
+    if(Math.random()>=chance){missed.push(label);return}
+    // Things given, paid or bought in the story arrive in full; drops are rolled.
+    const count=certain?listed:rollDropAmount(listed);
     if(key==='coins'){inventoryCoins+=count;gained.push(`tiền +${count.toLocaleString('vi-VN')} đồng`);return}
-    if(key){occultMaterials[key]+=count;gained.push(`${materialOffers[key][0]} +${count} ${materialOffers[key][2]}`);return}
-    const label=name.charAt(0).toUpperCase()+name.slice(1);
+    if(key){occultMaterials[key]+=count;gained.push(`${label} +${count} ${materialOffers[key][2]}`);return}
     const stack=lootItems[label]||(lootItems[label]={count:0,unit});
     stack.count+=count;if(unit)stack.unit=unit;
     gained.push(`${label} +${count.toLocaleString('vi-VN')}${unit?` ${unit}`:''}`);
   });
   renderItems();
-  return [`Chiến lợi phẩm: ${gained.join(', ')}.`];
+  return [
+    gained.length?`Chiến lợi phẩm: ${gained.join(', ')}.`:'',
+    missed.length?`Lần này không rơi: ${[...new Set(missed)].join(', ')}.`:''
+  ].filter(Boolean);
 }
 function lootSummary(){return Object.entries(lootItems).filter(([,stack])=>stack.count>0).map(([name,{count,unit}])=>`${name} ×${count.toLocaleString('vi-VN')}${unit?` ${unit}`:''}`).join('; ')}
 function lootRows(){

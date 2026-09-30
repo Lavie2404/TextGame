@@ -157,7 +157,7 @@ function renderConsumables(){
   const potionRows=owned.map(([key,count])=>{const potion=potionFromKey(key),grade=potion[1];return `<div class="item"><span class="item-icon">⚱</span><span class="item-details"><b>Bình máu ×${count}</b><small class="item-grade rarity-${rarity[grade]}">${escapeHtml(grade)} · Cấp ${itemLevel(potion)}</small><small class="item-effect">${escapeHtml(potionDescription(potion))}</small></span><span class="item-actions"><button type="button" class="item-toggle" data-use-potion="${escapeHtml(key)}" aria-label="Dùng Bình máu ${escapeHtml(grade)} cấp ${itemLevel(potion)}">Dùng</button></span></div>`});
   // Demonic materials are consumed automatically, so they are listed without a button.
   const materialRows=Object.entries(occultMaterials).filter(([,count])=>count>0).map(([key,count])=>`<div class="item"><span class="item-icon">☗</span><span class="item-details"><b>${escapeHtml(materialOffers[key][0])} ×${count}</b><small class="item-grade">Nguyên liệu</small><small class="item-effect">${escapeHtml(materialDescription(key))}</small></span></div>`);
-  list.innerHTML=[...potionRows,...materialRows,...lootRows()].join('')||'<p class="inventory-empty">Chưa có vật phẩm. Mua Bình máu và nguyên liệu ở tab Vật phẩm của Cửa hàng; chiến lợi phẩm trong truyện cũng nằm ở đây.</p>';
+  list.innerHTML=[...potionRows,...materialRows,...lootRows()].join('')||'<p class="inventory-empty">Chưa có vật phẩm. Mua Bình máu, độc thảo, oán phù ở tab Vật phẩm của Cửa hàng; chiến lợi phẩm trong truyện cũng nằm ở đây.</p>';
 }
 
 // End of chapter: without combat, recover 10% of max HP plus the active recovery mind art's bonus.

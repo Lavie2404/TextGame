@@ -6,12 +6,15 @@ const demonicSchools = {
   curse: {label:'Chú oán',names:['Kết Oán Quyết','Hắc Ấn Chú Kinh','U Oán Tỏa Tâm','Cửu Kết Chú Thư','Thiên Oán Linh Văn','Vạn Kiếp Chú Điển'],materials:['talisman'],condition:rank=>`Mỗi lượt cần ${rank} lá oán phù làm vật dẫn.`,pay:rank=>consumeMaterial('talisman',rank)},
   shadow: {label:'Ảnh tu',names:['Ẩn Ảnh Quyết','Vô Đăng Tâm Kinh','Tàng Nguyệt Ảnh Lục','Hắc Dạ Quy Nguyên','Thiên Ảnh Vô Hình','Vĩnh Dạ Tâm Điển'],materials:[],condition:()=> 'Phải nhập thất trong bóng tối: mỗi lượt nhập thất không dùng bạo phát; cần bật chế độ nhập thất.',pay:()=>shadowRetreat&&!pendingBurst}
 };
-// Demonic materials are consumables sold in the shop's Vật phẩm tab: key -> [label, price, unit].
+// Demonic materials: key -> [label, shop price, unit]. Blood and corpses have no price: they are never sold and
+// only come from loot (see loot.js); the shop's Vật phẩm tab sells the priced ones.
 const materialOffers={
-  animalBlood:['Máu động vật',5,'phần'],humanBlood:['Máu người',5,'phần'],
-  animalCorpse:['Thi thể động vật',20,'thi thể'],humanCorpse:['Thi thể người',20,'thi thể'],
+  animalBlood:['Máu động vật',null,'phần'],humanBlood:['Máu người',null,'phần'],
+  animalCorpse:['Thi thể động vật',null,'thi thể'],humanCorpse:['Thi thể người',null,'thi thể'],
   poison:['Độc thảo',5,'phần'],talisman:['Oán phù',5,'lá']
 };
+function materialSold(key){return materialOffers[key][1]!==null}
+function materialSourceText(key){return materialSold(key)?'mua ở tab Vật phẩm của Cửa hàng hoặc nhận từ chiến lợi phẩm':'chỉ thu được từ chiến lợi phẩm khi hạ quái vật hoặc kẻ địch, không bán ở Cửa hàng'}
 const occultMaterials=Object.fromEntries(Object.keys(materialOffers).map(key=>[key,0]));
 let servants=[],nextServantId=1,shadowRetreat=false;
 function resetDemonicState(){Object.keys(occultMaterials).forEach(key=>occultMaterials[key]=0);servants=[];nextServantId=1;shadowRetreat=false}
@@ -63,7 +66,7 @@ function renderDemonicPanel(){
   if(!art){panel.innerHTML='';return}
   const school=demonicSchool(art),count=key=>`${materialOffers[key][0]}: ${occultMaterials[key]} ${materialOffers[key][2]}`;
   let html=`<p class="inventory-empty"><b>${escapeHtml(art[0])}</b> · ${school.label}. ${school.condition(itemRank(art))}</p>`;
-  if(school.materials.length)html+=`<p class="inventory-empty">${school.materials.map(count).join(' · ')}. Mua thêm ở tab Vật phẩm của Cửa hàng.</p>`;
+  if(school.materials.length)html+=`<p class="inventory-empty">${school.materials.map(count).join(' · ')}. Nguồn: ${materialSourceText(school.materials[0])}.</p>`;
   if(art[5]==='shadow')html+=`<label><input type="checkbox" id="shadow-retreat" ${shadowRetreat?'checked':''}> Nhập thất bóng tối (không dùng bạo phát)</label>`;
   if(art[5]==='necromancy'){
     const activeIds=new Set(controlledServants().map(s=>s.id));

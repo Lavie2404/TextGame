@@ -690,7 +690,105 @@
 
   const coherentProseRule = 'VIẾT CÓ NGHĨA VÀ ĐÚNG BỐI CẢNH: Mỗi câu phải rõ chủ thể, hành động và đối tượng; lời thoại phải có mục đích phù hợp tình huống. Địa danh, phe phái, chức danh phải nhất quán với thế giới và thời kỳ đã chọn. Không ghép tên tùy tiện thành địa danh hoặc tổ chức như "biên giới Mạnh", "Mạnh Tông" khi chưa được xác lập. Với nhân vật lịch sử, không tự đổi phe phái hoặc vai trò nếu người chơi chưa thiết lập lịch sử thay thế. Nếu chưa đủ dữ kiện, dùng mô tả địa điểm rõ ràng như "bìa rừng phía bắc doanh trại", không bịa tên như một sự thật đã biết. Địa danh hư cấu mới phải được giới thiệu quan hệ với nơi hiện tại và vai trò trong tình huống. Trước khi trả lời, rà lại tên riêng, ý nghĩa câu và sự liên kết giữa lời kể với lời thoại. Trong lời kể có thể dùng **tên nhân vật**, **thân phận**, **cảnh giới** để nhấn mạnh chọn lọc; không bọc cả đoạn hoặc dùng các kiểu Markdown khác.';
 
-  const lootRule = 'CHIẾN LỢI PHẨM (BẮT BUỘC): Sau phần truyện, viết thêm đúng một dòng cuối cùng, tách riêng, theo mẫu "[CHIẾN LỢI PHẨM] tên: số lượng đơn vị; tên: số lượng đơn vị" liệt kê những gì nhân vật người chơi thực sự thu được trong lượt này: vật liệu từ quái vật hay kẻ địch đã hạ, tiền, đồ được tặng hoặc nhặt. Số lượng và tên phải hợp với sự việc vừa kể; ví dụ hạ 2 con sói: "[CHIẾN LỢI PHẨM] thịt sói: 20 cân; da sói: 1 tấm; nanh sói: 3; vuốt sói: 5; thi thể động vật: 1; máu động vật: 5 phần". Thi thể còn nguyên ghi "thi thể động vật" hoặc "thi thể người"; máu hứng được ghi "máu động vật" hoặc "máu người"; độc thảo và oán phù ghi đúng tên đó; tiền ghi "tiền: 30 đồng". Không ghi trang bị, kỹ năng hay tu vi vào dòng này. Lượt không thu được gì thì ghi "[CHIẾN LỢI PHẨM] không". Không viết gì sau dòng này.';
+  const hanVietRule = 'TÊN RIÊNG PHẢI LÀ ÂM HÁN VIỆT: Mọi tên người, địa danh, tông môn, chức danh, công pháp và thuật ngữ gốc Trung Hoa đều viết bằng âm Hán Việt có dấu tiếng Việt, không viết bính âm (pinyin) và không kèm chữ Hán. Đúng: Tào Tháo, Lưu Bị, Gia Cát Lượng, Hứa Xương. Sai: Cao Cao, Liu Bei, Zhuge Liang, Xuchang, hoặc tên mang dấu thanh bính âm như Wáng Hào, Zhāng Wěi. Các tên này chỉ minh họa cách viết, không tự đưa vào truyện. Điều này áp dụng cho cả thuộc tính speaker trong thẻ thoại và mọi tên trong lời kể. Nếu bối cảnh là tác phẩm hay lịch sử Trung Hoa, dùng đúng tên Hán Việt quen thuộc với độc giả Việt Nam; nhân vật hư cấu mới cũng đặt tên Hán Việt. Trước khi trả lời, rà lại mọi tên riêng và sửa hết dạng bính âm.';
+
+  // Output guard for the rule above: small local models still slip into pinyin now and then, so names that look
+  // like pinyin are sent to one short Ollama call for their Hán Việt reading and replaced before rendering.
+  // Answers are cached per name (a name mapped to itself means "not pinyin", e.g. a Western name).
+  const nameFixes = new Map();
+  function looksLikePinyin(token) {
+    const lower = token.toLocaleLowerCase('vi').normalize('NFD');
+    if (/[\u0304\u030c\u0308]/.test(lower)) return true; // macron, caron, diaeresis: pinyin only
+    if (/[\u0302\u0306\u031b\u0303\u0309\u0323]|đ/.test(lower)) return false; // â ă ơ ư, ngã, hỏi, nặng, đ: Vietnamese only
+    const plain = lower.replace(/[\u0300\u0301]/g, '');
+    return /[wzjf]/.test(plain) || /^(sh|zh|q(?!u)|y[aeiou])/.test(plain)
+      || /(ing|eng|ei|ou|uo|iao|iong|iang|ian|[iu]e)$/.test(plain) || /(?<!q)uang?$/.test(plain)
+      || /[aeiouy][^aeiouy]+[aeiouy]/.test(plain); // two syllables in one word (Xuchang, Luoyang)
+  }
+  // Toneless pinyin such as "Cao Cao" or "Liu Bei" is built from valid Vietnamese syllables, so the only tell is a
+  // multi-word name without a single diacritic; the repair call keeps real Vietnamese names like "Minh Anh" as they are.
+  function looksLikeTonelessName(tokens) {
+    return tokens.length >= 2 && tokens.every(token => /^[A-Za-z]+$/.test(token));
+  }
+  function findPinyinNames(text, playerName) {
+    const visible = text.replace(/<dialogue\s+speaker\s*=\s*(["'])(.*?)\1\s*>/gi, ' $2. ').replace(/<[^>]*>/g, ' ');
+    const names = new Set();
+    for (const match of visible.matchAll(/\p{Lu}[\p{L}\p{M}]*(?:[ \t]+\p{Lu}[\p{L}\p{M}]*){0,3}/gu)) {
+      // Keep only the run of tokens around a pinyin-looking one that carry no Vietnamese-only marks.
+      const tokens = match[0].split(/[ \t]+/);
+      const vietnameseOnly = token => /[\u0302\u0306\u031b\u0303\u0309\u0323]|đ/i.test(token.normalize('NFD'));
+      let run = [];
+      const flush = () => { if (run.some(looksLikePinyin) || looksLikeTonelessName(run)) names.add(run.join(' ')); run = []; };
+      tokens.forEach(token => { if (vietnameseOnly(token)) flush(); else run.push(token); });
+      flush();
+    }
+    return [...names].filter(name => !playerName.includes(name));
+  }
+  async function fixPinyinNames(text, model, profile) {
+    const found = findPinyinNames(text, profile.name);
+    // "Zhang Wei" and "Zhāng Wěi" are one name: cache by the toneless spelling and ask about the most marked variant.
+    const nameKey = name => name.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('vi');
+    const variants = new Map();
+    found.filter(name => !nameFixes.has(nameKey(name))).forEach(name => {
+      const best = variants.get(nameKey(name));
+      if (!best || name.normalize('NFD').length > best.normalize('NFD').length) variants.set(nameKey(name), name);
+    });
+    const unknown = [...variants.values()];
+    if (unknown.length) {
+      help.textContent = 'Đang chuyển tên viết bằng bính âm sang âm Hán Việt…';
+      try {
+        const response = await fetchWithTimeout(`${OLLAMA_URL}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: 'Ngươi chuyển tên riêng viết bằng bính âm Trung Quốc sang âm Hán Việt có dấu tiếng Việt. Trả về JSON {"names":[{"from":"…","to":"…"}]} cho đủ mọi mục được hỏi, giữ nguyên chữ trong from. Ví dụ: Wáng Hào → Vương Hạo; Cao Cao → Tào Tháo; Zhang Wei → Trương Vĩ; Xuchang → Hứa Xương; Liu Bei → Lưu Bị. Nếu mục không phải tên Trung Hoa viết bính âm (tên phương Tây, từ tiếng Việt thông thường, tên đã là Hán Việt) thì to ghi y hệt from.' },
+              { role: 'user', content: `BỐI CẢNH: ${(profile.setting || profile.worldName || '').slice(0, 300)}\nCÁC MỤC CẦN XÉT:\n${unknown.map(name => `- ${name}`).join('\n')}` }
+            ],
+            format: { type: 'object', properties: { names: { type: 'array', items: { type: 'object', properties: { from: { type: 'string' }, to: { type: 'string' } }, required: ['from', 'to'] } } }, required: ['names'] },
+            think: false,
+            stream: false,
+            keep_alive: '10m',
+            options: { temperature: 0, num_predict: 60 + unknown.length * 40 }
+          })
+        }, 120000);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
+        const answers = JSON.parse(data.message?.content || '{}').names || [];
+        answers.forEach((entry, index) => {
+          const from = unknown.includes(entry.from) ? entry.from : answers.length === unknown.length ? unknown[index] : '';
+          const to = String(entry.to || '').replace(/[<>"]/g, '').trim();
+          // Accept "unchanged" (not pinyin after all) or a reading that no longer looks like pinyin.
+          if (from && to && (to === from || !to.split(/\s+/).some(looksLikePinyin))) nameFixes.set(nameKey(from), to === from ? null : to);
+        });
+      } catch (error) {
+        console.warn('Không chuyển được tên bính âm; giữ nguyên tên trong lượt này.', error);
+      }
+    }
+    // A cached null means "checked, not pinyin": leave every spelling of that name alone.
+    return found.filter(name => nameFixes.get(nameKey(name)))
+      .sort((a, b) => b.length - a.length)
+      .reduce((result, name) => result.split(name).join(nameFixes.get(nameKey(name))), text);
+  }
+
+  // Blood and whole corpses are gathered only by the demonic school that cultivates with them (see lootCollects in loot.js).
+  function lootRule() {
+    const school = activeDemonic()?.[5] || '';
+    const special = school === 'blood'
+      ? 'Nhân vật đang tu Huyết công nên có lấy máu: mỗi con thú hoặc kẻ địch bị hạ ghi thêm "máu động vật" hoặc "máu người" theo số phần hợp lý (thú nhỏ 1–2 phần, thú lớn hoặc người 3–5 phần), ví dụ "máu động vật: 4 phần". Máu không mua được ở đâu, chỉ có từ những lần hạ địch như vậy. Không ghi thi thể: nhân vật không thu thập xác.'
+      : school === 'necromancy'
+        ? 'Nhân vật đang tu Tử Linh thuật nên có thu xác: mỗi con thú hoặc kẻ địch bị hạ mà xác còn nguyên ghi thêm 1 "thi thể động vật" hoặc "thi thể người", ví dụ "thi thể động vật: 2". Thi thể không mua được ở đâu, chỉ có từ những lần hạ địch như vậy. Không ghi máu: nhân vật không thu thập máu.'
+        : 'Không ghi máu hay thi thể nguyên vẹn vào dòng này: nhân vật không tu pháp môn cần chúng nên không thu thập.';
+    return [
+      'CHIẾN LỢI PHẨM (BẮT BUỘC): Sau phần truyện, viết thêm đúng một dòng cuối cùng, tách riêng, theo mẫu "[CHIẾN LỢI PHẨM] tên: số lượng đơn vị; tên: số lượng đơn vị" liệt kê những gì có thể thu từ yêu thú, động vật hoặc kẻ địch mà nhân vật người chơi đã hạ trong lượt này; tên và số lượng phải hợp với sự việc vừa kể.',
+      'Yêu thú và động vật bị hạ luôn cho thịt, da, nanh, vuốt, sừng, lông… của chính loài đó; ví dụ hạ 2 con sói: "[CHIẾN LỢI PHẨM] thịt sói: 20 cân; da sói: 2 tấm; nanh sói: 4; vuốt sói: 8". Người bị hạ không cho thịt, da hay nanh; với người chỉ ghi tiền hoặc vật họ mang theo.',
+      'Tiền, độc thảo, oán phù và mọi vật phẩm khác chỉ là thứ có thể rơi: hợp lý thì cứ ghi vào dòng này (tiền ghi "tiền: 30 đồng"), hệ thống sẽ tung tỷ lệ để quyết định có rơi thật hay không. Số lượng ghi trong dòng này là mức tối đa có thể thu; hệ thống tự tung số thực nhận. Vì vậy trong lời kể không viết rằng nhân vật đã lấy được tiền hay vật phẩm từ kẻ vừa bị hạ, cũng không nêu con số chiến lợi phẩm cụ thể.',
+      special,
+      'Thứ chắc chắn nhận vì được tặng, trả công hoặc mua trong truyện thì ghi ở một dòng riêng ngay phía trên: "[NHẬN ĐƯỢC] tên: số lượng đơn vị"; không có thì bỏ dòng đó.',
+      'Không ghi trang bị, kỹ năng hay tu vi. Lượt không hạ được gì thì ghi "[CHIẾN LỢI PHẨM] không". Không viết gì sau dòng [CHIẾN LỢI PHẨM].'
+    ].join(' ');
+  }
 
   function buildSystemPrompt(profile) {
     return [
@@ -705,8 +803,9 @@
       worldDirective(profile),
       narrationPerspectiveRule(profile),
       namedDialogueRule,
+      hanVietRule,
       coherentProseRule,
-      lootRule,
+      lootRule(),
       'Chỉ xuất phần truyện có thể hiện cho người chơi. Không viết suy nghĩ nội bộ, phân tích, kế hoạch, lời dẫn meta, tiêu đề, đánh số đoạn; chỉ cho phép **cụm từ** để nhấn mạnh trong lời kể. Không lặp lại yêu cầu.',
       `Gán speaker theo người thực sự nói trong tình tiết. Lời của nhân vật chính phải ghi speaker="${profile.name}"; không dùng Lời, Lời nói hoặc đại từ làm tên NPC. Giữ suy nghĩ nội tâm trong lời kể.`,
       `HỒ SƠ NHÂN VẬT: ${profile.name}${profile.age ? `, ${profile.age} tuổi` : ''}; thân phận: ${profile.identity || 'chưa xác định'}; cảnh giới: ${profile.realm || 'chưa xác định'}.`,
@@ -738,6 +837,7 @@
                 worldDirective(profile),
                 narrationPerspectiveRule(profile),
                 namedDialogueRule,
+                hanVietRule,
                 coherentProseRule,
                 'ĐỊNH DẠNG BẮT BUỘC: Mọi câu được nhân vật nói ra phải là <dialogue speaker="Tên nhân vật">Lời nói</dialogue>, kể cả thoại của nhân vật chính. Không viết câu thoại trong ngoặc kép ngoài thẻ và không gắn thoại vào đoạn kể. Ví dụ đúng: Mưa quất lên mái ngói. <dialogue speaker="Lâm Tuyết">Huynh nghe thấy tiếng động không?</dialogue> Ví dụ sai: Mưa quất lên mái ngói. “Huynh nghe thấy tiếng động không?” nàng hỏi. Âm thanh như “phịch”, “vù”, “rầm”, “keng” là lời kể, không phải lời thoại; tên gọi, danh xưng hay thuật ngữ nhắc giữa câu kể cũng vậy. Muốn làm nổi bật chúng thì viết trong cặp **...** (ví dụ: **Đấu Tông sơ kỳ**), không dùng dấu ngoặc kép hay ngoặc đơn. Chỉ viết tiếng Việt bằng chữ Quốc ngữ; tuyệt đối không có chữ Hán hay từ viết bằng chữ Hán. Hãy tự rà soát toàn bộ đầu ra trước khi kết thúc.',
                 'Không ấn định số đoạn hoặc số từ cho phần mở đầu. Viết đủ để người chơi hiểu xuất thân và tình hình hiện tại, rồi dừng ở điểm có thể lựa chọn hành động. Không lặp ý hoặc kéo dài để đạt độ dài nào đó. Không dùng tiêu đề, danh sách hoặc Markdown ngoài **cụm từ** nhấn mạnh trong lời kể. Không tự quyết định hành động quan trọng thay người chơi.'
@@ -766,7 +866,8 @@
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
       // The opening grants nothing; drop a loot line if the model adds one anyway.
-      const opening = removeRepeatedPassages(normalizeDialogue(extractLoot(data.message?.content?.trim() || '').text, profile.name));
+      const openingText = await fixPinyinNames(extractLoot(data.message?.content?.trim() || '').text, model, profile);
+      const opening = removeRepeatedPassages(normalizeDialogue(openingText, profile.name));
       if (!opening) throw new Error('Model không trả về đoạn mở đầu.');
       setStatus('ready');
       help.textContent = `Đã tạo cảnh mở đầu bằng ${model}.`;
@@ -799,7 +900,7 @@
           { role: 'user', content: [
             `THẾ GIỚI: ${profile.setting || profile.worldName}`,
             `NHÂN VẬT CẦN LẬP HỒ SƠ: "${speaker}" (tên hiển thị trong truyện).`,
-            'fullName: họ và tên đầy đủ. Nếu truyện chỉ gọi bằng chức danh hoặc biệt danh, đặt họ tên hợp thời đại và giữ phần đã biết (ví dụ "Trưởng lão Từ" thì họ Từ).',
+            'fullName: họ và tên đầy đủ bằng âm Hán Việt có dấu (Vương Hạo, không viết Wáng Hào hay Wang Hao). Nếu truyện chỉ gọi bằng chức danh hoặc biệt danh, đặt họ tên hợp thời đại và giữ phần đã biết (ví dụ "Trưởng lão Từ" thì họ Từ). Nếu tên hiển thị trong truyện đang ở dạng bính âm, hãy chuyển sang Hán Việt.',
             'courtesyName: tên tự, nếu thời đại/thân phận có dùng tên tự; nếu không thì ghi "Không có".',
             'identity: thân phận, chức vụ, phe phái. appearance: ngoại hình, 1–2 câu. personality: tính cách, 1–2 câu.',
             `level: 0 nếu là người thường chưa tu luyện; ngược lại từ 1 đến ${Math.max(worldRealms.length * 10, 1)}, tương xứng với thân phận và sức mạnh truyện đã thể hiện. Hệ thống cảnh giới: ${realms}. Nhân vật chính ${profile.name} đang ở ${profile.realm}. Chỉ số do hệ thống tự tính theo cấp độ, không cần ghi.`,
@@ -887,7 +988,7 @@
         ...[...story.querySelectorAll('.narration, .story-entry dialogue')].map(node => node.textContent.trim())
       ];
       const loot = extractLoot(data.message?.content?.trim() || '');
-      const answer = removeRepeatedPassages(normalizeDialogue(loot.text, profile.name), priorStory);
+      const answer = removeRepeatedPassages(normalizeDialogue(await fixPinyinNames(loot.text, model, profile), profile.name), priorStory);
       if (!answer) throw new Error('Model không trả về phần truyện.');
 
       answer.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean)

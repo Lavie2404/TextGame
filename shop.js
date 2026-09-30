@@ -33,10 +33,10 @@ function rollShopStock(level){
     if(rollsUpgrade(tier))picked[Math.floor(Math.random()*picked.length)].tier=tier+1;
     return picked;
   };
-  // Consumables are always in stock and can be bought repeatedly: Bình máu at the realm's grade, plus demonic materials.
+  // Consumables are always in stock and can be bought repeatedly: Bình máu at the realm's grade, plus the demonic materials that are for sale (blood and corpses only drop as loot).
   const items=[{kind:'potion',tier}];
   if(rollsUpgrade(tier))items.push({kind:'potion',tier:tier+1});
-  Object.keys(materialOffers).forEach(material=>items.push({kind:'material',material}));
+  Object.keys(materialOffers).filter(materialSold).forEach(material=>items.push({kind:'material',material}));
   return {id:`${Date.now()}${Math.random()}`,level,tier,equipment:slots('equipment'),skill:slots('skill'),item:items};
 }
 function shopCatalog(stock) {
