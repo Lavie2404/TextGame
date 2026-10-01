@@ -1098,6 +1098,41 @@
     }
   };
 
+  // A kind name for a beast, built from what the story shows of it: Tật Phong Lang for a wind-fast wolf,
+  // Bích Lân Xà for a jade-scaled snake. Also the trait and the signature move that trait gives.
+  window.generateBeastName = async (foe, recentStory) => {
+    const model = modelInput.value.trim();
+    if (!model) throw new Error('Hãy nhập tên model Ollama trong Thiết lập.');
+    const profile = getProfile();
+    const response = await fetchWithTimeout(`${OLLAMA_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'Ngươi đặt tên cho yêu thú trong game truyện cổ trang. Chỉ trả về JSON đúng lược đồ, viết tiếng Việt bằng âm Hán Việt có dấu, không chữ Hán, không giải thích.' },
+          { role: 'user', content: [
+            `THẾ GIỚI: ${profile.setting || profile.worldName}`,
+            `YÊU THÚ: truyện gọi là "${foe.opponent}", loài ${foe.species}${foe.transformed ? ', đã hóa hình thành người' : ''}.`,
+            'name: tên loài theo đặc tính nổi bật nhất mà truyện đã tả (màu sắc, vảy lông, tốc độ, nguyên tố, huyết mạch…), 3 chữ Hán Việt, chữ cuối là loài: ví dụ Tật Phong Lang (sói nhanh như gió, điều khiển gió), Bích Lân Xà (rắn vảy ngọc bích), Bạch Long Mã (ngựa trắng có sừng và huyết mạch rồng), Xích Viêm Hổ (hổ lửa đỏ). Nếu truyện đã gọi nó bằng một tên riêng kiểu đó thì giữ nguyên.',
+            'trait: đặc tính ấy, một cụm ngắn (ví dụ: lông xám bạc, nhanh như gió, điều khiển được gió).',
+            'signatureMove: một đòn đặc trưng sinh ra từ đặc tính, 2–5 chữ, hợp với loài (ví dụ: gọi cuồng phong; phun độc ngọc bích; sừng rồng húc lôi). Yêu thú tầm thường không có đặc tính thì để rỗng.',
+            `DIỄN BIẾN GẦN ĐÂY:\n${recentStory}`
+          ].join('\n\n') }
+        ],
+        format: { type: 'object', properties: { name: { type: 'string' }, trait: { type: 'string' }, signatureMove: { type: 'string' } }, required: ['name', 'trait', 'signatureMove'] },
+        think: false,
+        stream: false,
+        keep_alive: '10m',
+        options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0.6, top_p: 0.9, num_predict: 80 }
+      })
+    }, 120000);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
+    const parsed = JSON.parse(data.message?.content?.match(/\{[\s\S]*\}/)?.[0] || '{}');
+    return { name: String(parsed.name || '').replace(/\s+/g, ' ').trim(), trait: String(parsed.trait || '').trim(), signatureMove: String(parsed.signatureMove || '').trim() };
+  };
+
   // A courtesy name (tên tự) for an NPC whose profile has none, fitting the world and the person.
   window.generateNpcCourtesyName = async npc => {
     const model = modelInput.value.trim();
@@ -1162,10 +1197,18 @@
   // Resolve a duel by the numbers and hand back the script for the model plus the outcome to apply.
   async function prepareCombat(foe, profile) {
     const { opponent } = foe;
+    if (foe.beast && !npcProfiles.has(opponent)) {
+      const known = findBeastProfile(opponent, foe.species);
+      if (known) foe.opponent = opponent = known.speaker;
+    }
     if (!npcProfiles.has(opponent)) {
       help.textContent = `Đang lập hồ sơ và chỉ số cho ${opponent} trước trận đánh…`;
-      if (foe.beast) npcProfiles.set(opponent, makeBeastProfile(opponent, foe.species, foe.transformed, foe.threat));
-      else {
+      if (foe.beast) {
+        const named = await window.generateBeastName(foe, formatRecentStoryContext(2500)).catch(() => ({}));
+        const beast = makeBeastProfile(opponent, foe.species, foe.transformed, foe.threat, named);
+        foe.opponent = opponent = beast.speaker;
+        npcProfiles.set(opponent, beast);
+      } else {
         if (!pendingNpcProfiles.has(opponent)) pendingNpcProfiles.set(opponent, window.generateNpcProfile(opponent).finally(() => pendingNpcProfiles.delete(opponent)));
         npcProfiles.set(opponent, normalizeNpcProfile(await pendingNpcProfiles.get(opponent), opponent));
       }
@@ -1184,7 +1227,7 @@
     const loadout = [
       arms(profile.name, active(equipment).filter(item => item[4] !== 'mount'), active(skills).filter(item => ['attack', 'defense', 'speed', 'burstAttack', 'burstDefense', 'burstSpeed'].includes(item[4]))),
       npc.beast && !npc.transformed
-        ? `${opponent}: yêu thú loài ${npc.species} chưa hóa hình, không dùng vũ khí hay công pháp; chỉ đánh bằng bản năng loài: ${npc.naturalAttacks.join(', ')}`
+        ? `${opponent}: yêu thú loài ${npc.species} chưa hóa hình${npc.trait ? ` (đặc tính: ${npc.trait})` : ''}; trong truyện gọi nó là ${opponent}; không dùng vũ khí hay công pháp, chỉ đánh bằng bản năng loài: ${npc.naturalAttacks.join(', ')}`
         : arms(opponent, npc.equipment || [], npc.skills || [])
     ].join('\n');
     return { npc, result, script: `${combatScript(result)}\nVŨ KHÍ VÀ CHIÊU THỨC HAI BÊN (mỗi đòn phải gọi tên chiêu thức, vũ khí hoặc đòn bản năng của bên ra đòn; người không có kỹ năng thì dùng quyền cước, binh khí thường; thú chưa hóa hình chỉ dùng đòn bản năng của loài):\n${loadout}` };

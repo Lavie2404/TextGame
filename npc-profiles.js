@@ -52,12 +52,21 @@ function beastAttacks(species){
 }
 // A beast's profile is built here, not by the model: level from the threat the classifier judged, stats
 // rolled like any character, gear only once it has taken human form.
-function makeBeastProfile(name,species,transformed,threat){
+// `named` comes from the model: a trait-based kind name (Tật Phong Lang), the trait itself and the signature
+// move that trait gives (gọi cuồng phong), which joins the species-born attacks.
+function makeBeastProfile(alias,species,transformed,threat,named={}){
   const base=Math.max(0,playerLevel()),offset=threat==='mạnh'?randomInt(2,NPC_LEVEL_LEAD):threat==='yếu'?randomInt(-6,-2):randomInt(-2,2);
   const level=Math.min(npcLevelCap(),Math.max(1,base+offset));
-  const profile=normalizeNpcProfile({fullName:name,courtesyName:'Không có',identity:`Yêu thú loài ${species}${transformed?', đã hóa hình thành người':', chưa hóa hình'}`,appearance:'Chưa rõ',personality:'Hoang dã, hiếu chiến',level},name);
+  const name=String(named.name||'').trim()||alias,trait=String(named.trait||'').trim(),move=String(named.signatureMove||'').trim();
+  const profile=normalizeNpcProfile({fullName:name,courtesyName:'Không có',identity:`Yêu thú loài ${species}${transformed?', đã hóa hình thành người':', chưa hóa hình'}${trait?`; đặc tính: ${trait}`:''}`,appearance:trait||'Chưa rõ',personality:'Hoang dã, hiếu chiến',level},name);
   if(!transformed){profile.equipment=[];profile.skills=[]}
-  return {...profile,beast:true,species,transformed,naturalAttacks:transformed?[]:beastAttacks(species)};
+  const naturalAttacks=transformed?[]:[...(move?[move]:[]),...beastAttacks(species)];
+  return {...profile,beast:true,alias,species,transformed,trait,naturalAttacks};
+}
+// A beast met again under its everyday name ("con sói") keeps the profile it already has.
+function findBeastProfile(alias,species){
+  return [...npcProfiles.values()].find(p=>p.beast&&(p.alias===alias||p.speaker===alias)&&(p.health==null||p.health>0))
+    ||[...npcProfiles.values()].find(p=>p.beast&&p.species===species&&(p.health==null||p.health>0));
 }
 const npcItemNames=items=>(items||[]).map(item=>`${item[0]} (${item[1]}, cấp ${item[6]})`).join(', ')||'không có';
 // Stats follow the same rolling rules as the player (rollCharacterStats in item-rules.js); gear and techniques are rolled fresh.
