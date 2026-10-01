@@ -54,7 +54,7 @@ function npcProfilesContext(limit=10){
       `<div><dt>Cảnh giới</dt><dd id="npc-realm">${escapeHtml(profile.realm)}</dd></div>`+
       field('Cấp độ','level',profile.level,false,'',' type="number" min="0"')+
       `</dl></form>`+
-      `<div class="npc-stats">${Object.entries(CHARACTER_STAT_LABELS).map(([key,label])=>`<div><span>${label}</span><b>${profile.stats[key].toLocaleString('vi-VN')}</b></div>`).join('')}</div>`+
+      `<div class="npc-stats">${Object.entries(CHARACTER_STAT_LABELS).map(([key,label])=>`<div><span>${label}</span><b>${key==='health'&&profile.health!=null&&profile.health!==profile.stats.health?`${profile.health.toLocaleString('vi-VN')} / `:''}${profile.stats[key].toLocaleString('vi-VN')}</b></div>`).join('')}</div>`+
       `<div class="npc-actions"><button type="button" class="create-item" id="npc-save">Lưu hồ sơ</button><span class="npc-notice" role="status">${escapeHtml(notice)}</span></div>`;
     const form=body.querySelector('#npc-profile-form');
     const courtesyInput=form.querySelector('#npc-courtesyName'),courtesyButton=body.querySelector('#npc-courtesy-ai');
@@ -81,7 +81,7 @@ function npcProfilesContext(limit=10){
   function saveProfile(profile){
     const updated=normalizeNpcProfile(readForm(profile),profile.speaker);
     // Stats are only re-rolled when the level actually changed.
-    if(updated.level===profile.level)updated.stats=profile.stats;
+    if(updated.level===profile.level){updated.stats=profile.stats;if(profile.health!=null)updated.health=Math.min(profile.health,updated.stats.health)}
     npcProfiles.set(profile.speaker,updated);
     renderProfile(updated,'Đã lưu hồ sơ; truyện sẽ dùng thông tin này từ lượt sau.');
   }

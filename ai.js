@@ -848,7 +848,7 @@
     return `XƯNG HÔ TRONG LỜI THOẠI NHẤT QUÁN: Mỗi người nói chọn đúng một cặp xưng hô hợp với quan hệ, tuổi tác và địa vị so với người nghe, rồi giữ nguyên cặp đó trong cả câu thoại và các lượt sau: ta–ngươi (ngang hàng hoặc bề trên nói với bề dưới), tại hạ–các hạ (lịch sự giữa người lạ), huynh–đệ, tỷ–muội, lão phu–tiểu tử, cháu–ông/bác, con–cha/mẹ, thiếp–chàng, thuộc hạ–chủ công. Hai vế của cặp phải khớp vai: đã xưng "cháu", "con", "thuộc hạ" thì gọi người nghe là "ông", "bác", "cha", "chủ công", không gọi là "ngươi"; đã gọi người nghe là "ngươi" thì xưng "ta", "lão phu", "bổn tọa", không xưng "cháu" hay "con". Mẫu sai: "Cháu ở đây đợi ngươi suốt cả ngày." Mẫu đúng: "Ta ở đây đợi ngươi suốt cả ngày." hoặc "Cháu ở đây đợi bác suốt cả ngày." Khi gọi tên người khác trong thoại, viết đúng từng chữ tên đã xác lập; tên nhân vật người chơi là ${profile.name}, không viết thành dạng khác. Trước khi trả lời, rà lại từng câu thoại xem xưng hô có đổi vai giữa chừng không.`;
   }
 
-  const combatRule = 'GIAO CHIẾN PHẢI KỂ RÕ TỪNG ĐƯỜNG: Khi có đánh nhau, không được tóm tắt kiểu "trận chiến bắt đầu" hay "hai người giao đấu một hồi". Kể theo từng hiệp, mỗi hiệp gồm đủ bốn ý: (1) ai ra tay, bằng chiêu gì (gọi tên chiêu thức hoặc tả rõ động tác, vũ khí, hướng đánh; nhân vật chính chỉ dùng kỹ năng và trang bị đang có, người thường chưa tu luyện thì chỉ có quyền cước, binh khí thường); (2) chiêu đó nhắm vào đâu và uy lực ra sao; (3) đối thủ ứng phó thế nào: né tránh, đỡ đòn, phản công hay chịu đòn, và vì sao; (4) kết quả thật: trúng hay hụt, bị thương ở đâu, nặng nhẹ, mất thế hay giữ thế. Ít nhất 3 hiệp qua lại mỗi lượt có giao chiến; chênh lệch cấp độ và chỉ số (Công kích, Phòng ngự, Tốc độ, Máu) phải thể hiện trong kết quả từng hiệp. Kết thúc đoạn giao chiến phải nêu rõ trạng thái hai bên: còn đứng được không, thương tích, ai thắng thế, trận đánh đã kết thúc hay còn tiếp diễn. Nếu người chơi chỉ mới khơi mào hoặc nhận lời đánh, hãy kể hiệp đầu tiên ngay trong lượt này thay vì dừng ở lời hẹn.';
+  const combatRule = 'GIAO CHIẾN PHẢI KỂ RÕ TỪNG ĐƯỜNG: Khi có đánh nhau, không được tóm tắt kiểu "trận chiến bắt đầu" hay "hai người giao đấu một hồi". Kể theo từng hiệp, mỗi hiệp gồm đủ bốn ý: (1) ai ra tay, bằng chiêu gì (gọi tên chiêu thức hoặc tả rõ động tác, vũ khí, hướng đánh; nhân vật chính chỉ dùng kỹ năng và trang bị đang có, người thường chưa tu luyện thì chỉ có quyền cước, binh khí thường); (2) chiêu đó nhắm vào đâu và uy lực ra sao; (3) đối thủ ứng phó thế nào: né tránh, đỡ đòn, phản công hay chịu đòn, và vì sao; (4) kết quả thật: trúng hay hụt, bị thương ở đâu, nặng nhẹ, mất thế hay giữ thế. Khi lượt này có KỊCH BẢN GIAO CHIẾN do hệ thống tính sẵn thì số đòn, thứ tự ra đòn, mức thương tích và kết cục phải theo đúng kịch bản, không thêm bớt; không có kịch bản (đánh thú hoang, lính vô danh) thì ít nhất 3 hiệp và chênh lệch cấp độ, chỉ số phải thể hiện trong kết quả từng hiệp. Không bao giờ ghi con số chỉ số, máu hay phần trăm vào truyện. Kết thúc đoạn giao chiến phải nêu rõ trạng thái hai bên: còn đứng được không, thương tích, ai thắng thế, trận đánh đã kết thúc hay còn tiếp diễn. Nếu người chơi chỉ mới khơi mào hoặc nhận lời đánh, hãy kể hiệp đầu tiên ngay trong lượt này thay vì dừng ở lời hẹn.';
 
   const hiddenGoalRule = 'MỤC TIÊU LÀ ĐỘNG CƠ THẦM KÍN, KHÔNG BAO GIỜ NÓI RA: MỤC TIÊU và BƯỚC TIẾP THEO chỉ là định hướng cho người dẫn truyện để sắp xếp tình tiết; chúng tồn tại trong đầu nhân vật chính, không tồn tại trong thế giới truyện. Tuyệt đối không nhắc nguyên văn hay diễn đạt lại mục tiêu trong lời kể, trong lời thoại của nhân vật chính hay của bất kỳ NPC nào; không để nhân vật chính tuyên bố, tâm sự, nói bóng gió hay tự nhủ thành tiếng về mục tiêu; NPC không biết và không được đoán ra mục tiêu trừ khi chính hành động người chơi nhập vào đã nói ra. Hãy thể hiện mục tiêu bằng việc làm: nhân vật chính âm thầm chọn nơi đến, người làm quen, câu hỏi đặt ra, ân tình gây dựng, mỗi lượt tiến thêm một bước nhỏ và kín đáo. Mẫu sai: "Ta tới đây để dựng hậu cung mỹ nhân." Mẫu đúng: nhân vật chính hỏi thăm nàng về gia cảnh, giúp nàng một việc nhỏ, ghi nhớ nơi nàng ở. Những mục tiêu tai tiếng hay nguy hiểm nếu bị nói ra phải mang hậu quả thật: bị khinh ghét, tố cáo, truy bắt.';
 
@@ -1132,6 +1132,60 @@
     return name;
   };
 
+  // Does this action start (or carry on) a fight between the player and one named character? The model
+  // only classifies; the fight itself is then resolved by the numbers in combat.js.
+  async function detectCombatIntent(model, action, recentStory) {
+    const response = await fetchWithTimeout(`${OLLAMA_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'Ngươi phân loại hành động trong game truyện. Trả về JSON {"combat": true|false, "opponent": "tên"}. combat là true chỉ khi hành động người chơi vừa nhập khiến nhân vật chính thật sự giao đấu tay đôi với một nhân vật có tên trong truyện ngay lượt này (ra tay, nhận lời tỷ thí, bị tấn công và đánh trả). Lời khiêu khích, đe dọa, bàn bạc, hẹn đánh sau, đánh quái vô danh hay chạy trốn không phải combat. opponent là đúng tên nhân vật đó như truyện gọi; không giao đấu thì để chuỗi rỗng.' },
+          { role: 'user', content: `DIỄN BIẾN GẦN ĐÂY:\n${recentStory.slice(-2500)}\n\nHÀNH ĐỘNG NGƯỜI CHƠI:\n${action}` }
+        ],
+        format: { type: 'object', properties: { combat: { type: 'boolean' }, opponent: { type: 'string' } }, required: ['combat', 'opponent'] },
+        think: false,
+        stream: false,
+        keep_alive: '10m',
+        options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0, num_predict: 40 }
+      })
+    }, 60000);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
+    const parsed = JSON.parse(data.message?.content?.match(/\{[\s\S]*\}/)?.[0] || '{}');
+    const opponent = String(parsed.opponent || '').replace(/\*\*/g, '').trim();
+    return parsed.combat === true && opponent && opponent !== getProfile().name ? opponent : '';
+  }
+
+  // Resolve a duel by the numbers and hand back the script for the model plus the outcome to apply.
+  async function prepareCombat(opponent, profile) {
+    if (!npcProfiles.has(opponent)) {
+      help.textContent = `Đang lập hồ sơ và chỉ số cho ${opponent} trước trận đánh…`;
+      if (!pendingNpcProfiles.has(opponent)) pendingNpcProfiles.set(opponent, window.generateNpcProfile(opponent).finally(() => pendingNpcProfiles.delete(opponent)));
+      npcProfiles.set(opponent, normalizeNpcProfile(await pendingNpcProfiles.get(opponent), opponent));
+    }
+    const npc = npcProfiles.get(opponent);
+    npc.health = Math.min(npc.health ?? npc.stats.health, npc.stats.health);
+    const stats = effectiveStats();
+    const result = simulateCombat(
+      { name: profile.name, attack: stats.attack, defense: stats.defense, speed: stats.speed, maxHealth: maxHealth(), health: healthNow() },
+      { name: opponent, attack: npc.stats.attack, defense: npc.stats.defense, speed: npc.stats.speed, maxHealth: npc.stats.health, health: npc.health }
+    );
+    return { npc, result, script: combatScript(result) };
+  }
+
+  function applyCombatOutcome(combat) {
+    const { npc, result } = combat;
+    const lost = healthNow() - result.player.health;
+    // A beaten player is left at 1 HP, not dead: the story goes on.
+    currentHealth = Math.max(1, result.player.health);
+    npc.health = result.enemy.health;
+    renderItems();
+    const who = result.outcome === 'draw' ? 'bất phân thắng bại' : result.outcome === 'both' ? 'cả hai cùng gục' : `${result.winner} thắng`;
+    return `Giao chiến với ${npc.speaker}: ${result.strikes.length} đòn, ${who}. Ngươi mất ${lost.toLocaleString('vi-VN')} máu (${healthNow().toLocaleString('vi-VN')} / ${maxHealth().toLocaleString('vi-VN')}); ${npc.speaker} còn ${npc.health.toLocaleString('vi-VN')} / ${npc.stats.health.toLocaleString('vi-VN')} máu.`;
+  }
+
   async function playAI() {
     const action = getPlayerAction();
     if (!action) {
@@ -1152,14 +1206,17 @@
     const entries = getPlayerEntries();
     const recentStory = formatRecentStoryContext();
     const surprise = document.querySelector('#surprise-event').checked;
-    const userMessage = [
+    let combat = null;
+    const buildUserMessage = () => [
       `${getWorldContext(profile)}\n\nDIỄN BIẾN GẦN ĐÂY (ưu tiên mạch mới nhất):\n${recentStory}`,
       `BỘ NHỚ TỐI ĐA ${MAX_REMEMBERED_CHAPTERS} CHƯƠNG HOÀN TẤT GẦN NHẤT:\n${formatChapterMemory()}`,
       `CÁC LƯỢT ĐÃ KỂ TRONG CHƯƠNG ${chapterState.chapterNumber} (không kể lại):\n${formatCurrentChapterContext()}`,
       `HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI (bắt buộc kể lại đầy đủ, đúng thứ tự, ngay đầu lượt):\n${action}`,
       surprise ? 'Hãy thêm một tình tiết bất ngờ hợp lý, có dấu hiệu gieo trước và không giải quyết mọi việc quá dễ dàng.' : '',
+      combat ? `KỊCH BẢN GIAO CHIẾN GIỮA ${profile.name} VÀ ${combat.npc.speaker} (hệ thống đã tính xong theo chỉ số; BẮT BUỘC kể đúng số đòn, đúng thứ tự ai ra đòn, đúng mức thương tích và đúng kết cục; không được thêm bớt đòn, không đổi người thắng; tuyệt đối không ghi con số, phần trăm hay tên chỉ số vào truyện — chỉ miêu tả chiêu thức, động tác, cách né đỡ, vết thương và hơi thở của hai bên):\n${combat.script}` : '',
       'YÊU CẦU LƯỢT NÀY: Tiếp tục liền mạch từ câu cuối cùng trong diễn biến gần đây. Mở đầu bằng việc kể lại toàn bộ hành động và lời thoại người chơi vừa nhập: tường thuật được viết lại cho giàu hình ảnh và hợp ngữ cảnh, lời thoại được trau chuốt câu chữ nhưng giữ nguyên ý, không bỏ sót câu nào, đặt trong thẻ <dialogue speaker="..."> đúng người nói. Chỉ sau đó mới viết phản ứng, lời đáp và hệ quả. Nếu đó là câu hỏi, hãy để đúng người được hỏi trả lời chính xác câu hỏi trước khi mở rộng cảnh. Không đưa thêm sự kiện ngoài mạch. Chỉ kết thúc bằng dòng [CHIẾN LỢI PHẨM] nếu trong lượt này đã hạ gục xong kẻ địch; nếu không thì không có dòng đó.'
     ].filter(Boolean).join('\n\n');
+    let userMessage = '';
 
     turnButton.disabled = true;
     checkButton.disabled = true;
@@ -1192,6 +1249,13 @@
     };
 
     try {
+      help.textContent = 'Đang xét xem lượt này có giao chiến không…';
+      const opponent = await detectCombatIntent(model, action, recentStory).catch(() => '');
+      if (opponent) combat = await prepareCombat(opponent, profile);
+      help.textContent = combat
+        ? `Trận đấu với ${combat.npc.speaker} đã được tính xong (${combat.result.strikes.length} đòn); model đang viết lại diễn biến…`
+        : 'Model đang viết phần truyện dài khoảng 1.500–2.000 từ; có thể mất vài phút, nhất là lần gọi đầu.';
+      userMessage = buildUserMessage();
       let raw = await requestTurn([]);
       // The model must retell everything the player wrote. If it dropped a line, ask once more
       // naming what is missing; if it still drops it, put the player's own words in front.
@@ -1219,6 +1283,7 @@
         .forEach(part => appendNarrationWithDialogue(part, profile.name));
       removeDuplicateStoryEntries();
       completeProgressionTurn();
+      if (combat) appendTurnReport(applyCombatOutcome(combat));
       applyLoot(loot.entries).forEach(appendTurnReport);
       await updateJourney(model, action, answer);
       const chapterClosed = await recordTurn(action, answer, model);
