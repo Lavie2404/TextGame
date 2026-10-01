@@ -11,22 +11,44 @@ const npcProfiles = new Map(), pendingNpcProfiles = new Map();
 function resetNpcProfiles(){npcProfiles.clear();pendingNpcProfiles.clear()}
 function maxWorldLevel(){return worldRealms.length*10}
 function npcRealmLabel(level){return level<1?'Chưa tu luyện':getRealmForLevel(level)||'Chưa rõ'}
-// Stats follow the same rolling rules as the player (rollCharacterStats in item-rules.js).
+// An NPC may be at most this many levels above the player.
+const NPC_LEVEL_LEAD=5;
+function npcLevelCap(){return Math.min(Math.max(maxWorldLevel(),1),Math.max(0,playerLevel())+NPC_LEVEL_LEAD)}
+// NPC gear and techniques are rolled like shop stock: at the NPC's level, any grade up to the realm's grade
+// (rollGradeTier in shop.js), named from the same lists as the player's. A mortal (level 0) has none.
+function rollNpcLoadout(level){
+  if(level<1)return {equipment:[],skills:[]};
+  const tier=gradeTierForRealm(Math.floor((level-1)/10)),grades=Object.keys(rarity);
+  const make=kind=>{const t=rollGradeTier(tier);return [namedItems[kind][t],grades[t],itemKinds[kind][0]==='Trang bị'?'✦':'☯',true,kind,'',level]};
+  const equipment=['weapon','clothing','shoes','accessory'].filter((kind,index)=>index===0||Math.random()<.6).map(make);
+  if(Math.random()<.15)equipment.push(make('mount'));
+  return {equipment,skills:pickRandom(['attack','defense','speed'],randomInt(1,2)).map(make)};
+}
+// Base stats plus gear and technique bonuses, the same way effectiveStats() does it for the player.
+function npcEffectiveStats(profile){
+  const stats={...profile.stats},statFor={weapon:'attack',clothing:'defense',shoes:'speed',accessory:'health'};
+  (profile.equipment||[]).forEach(item=>{if(statFor[item[4]])stats[statFor[item[4]]]+=equipmentBonus(item);if(item[4]==='mount')addStats(stats,mountBonus(item))});
+  (profile.skills||[]).forEach(item=>{if(['attack','defense','speed'].includes(item[4]))stats[item[4]]+=levelGradeValue(item)});
+  for(const key of Object.keys(stats))stats[key]=Math.floor(stats[key]);
+  return stats;
+}
+const npcItemNames=items=>(items||[]).map(item=>`${item[0]} (${item[1]}, cấp ${item[6]})`).join(', ')||'không có';
+// Stats follow the same rolling rules as the player (rollCharacterStats in item-rules.js); gear and techniques are rolled fresh.
 function normalizeNpcProfile(raw,speaker){
   const text=(value,fallback,limit=240)=>String(value??'').replace(/\s+/g,' ').trim().slice(0,limit)||fallback;
-  const level=Math.min(Math.max(0,Math.round(Number(raw.level))||0),Math.max(maxWorldLevel(),1));
+  const level=Math.min(Math.max(0,Math.round(Number(raw.level))||0),npcLevelCap());
   const stats=rollCharacterStats(level);
   return {
     speaker,fullName:text(raw.fullName,speaker,60),courtesyName:text(raw.courtesyName,'Không có',40),
     identity:text(raw.identity,'Chưa rõ'),appearance:text(raw.appearance,'Chưa rõ',400),personality:text(raw.personality,'Chưa rõ',400),
-    level,realm:npcRealmLabel(level),stats
+    level,realm:npcRealmLabel(level),stats,...rollNpcLoadout(level)
   };
 }
 // Compact line per known NPC, fed back into story prompts so later turns stay consistent.
 function npcProfilesContext(limit=10){
   const known=[...npcProfiles.values()].slice(-limit);
   if(!known.length)return 'HỒ SƠ NPC ĐÃ XÁC LẬP: chưa có.';
-  return `HỒ SƠ NPC ĐÃ XÁC LẬP (giữ đúng, không mâu thuẫn): ${known.map(p=>`${p.speaker} = ${p.fullName}, tự ${p.courtesyName}; ${p.identity}; ${p.realm}${p.level?` cấp ${p.level}`:''}; tính cách: ${p.personality}; ${Object.entries(CHARACTER_STAT_LABELS).map(([key,label])=>`${label} ${p.stats[key]}`).join(', ')}`).join(' | ')}`;
+  return `HỒ SƠ NPC ĐÃ XÁC LẬP (giữ đúng, không mâu thuẫn): ${known.map(p=>`${p.speaker} = ${p.fullName}, tự ${p.courtesyName}; ${p.identity}; ${p.realm}${p.level?` cấp ${p.level}`:''}; tính cách: ${p.personality}; ${Object.entries(CHARACTER_STAT_LABELS).map(([key,label])=>`${label} ${npcEffectiveStats(p)[key]}`).join(', ')}; trang bị: ${npcItemNames(p.equipment)}; kỹ năng: ${npcItemNames(p.skills)}`).join(' | ')}`;
 }
 
 (() => {
@@ -54,7 +76,9 @@ function npcProfilesContext(limit=10){
       `<div><dt>Cảnh giới</dt><dd id="npc-realm">${escapeHtml(profile.realm)}</dd></div>`+
       field('Cấp độ','level',profile.level,false,'',' type="number" min="0"')+
       `</dl></form>`+
-      `<div class="npc-stats">${Object.entries(CHARACTER_STAT_LABELS).map(([key,label])=>`<div><span>${label}</span><b>${key==='health'&&profile.health!=null&&profile.health!==profile.stats.health?`${profile.health.toLocaleString('vi-VN')} / `:''}${profile.stats[key].toLocaleString('vi-VN')}</b></div>`).join('')}</div>`+
+      `<div class="npc-stats">${Object.entries(CHARACTER_STAT_LABELS).map(([key,label])=>`<div><span>${label}</span><b>${key==='health'&&profile.health!=null&&profile.health!==npcEffectiveStats(profile).health?`${profile.health.toLocaleString('vi-VN')} / `:''}${npcEffectiveStats(profile)[key].toLocaleString('vi-VN')}</b></div>`).join('')}</div>`+
+      `<p class="npc-note">Chỉ số đã gồm trang bị và kỹ năng; đổi cấp độ sẽ quay lại toàn bộ.</p>`+
+      ['Trang bị','Kỹ năng'].map((label,index)=>{const items=index?profile.skills:profile.equipment;return `<div class="npc-loadout"><h3>${label}</h3>${items?.length?items.map(item=>`<div class="item"><span class="item-icon">${escapeHtml(item[2])}</span><span class="item-details"><b>${escapeHtml(item[0])}</b><small>${escapeHtml(item[1])} · Cấp ${item[6]}</small><small>${escapeHtml(itemDescription(item))}</small></span></div>`).join(''):'<small class="npc-empty">Không có.</small>'}</div>`}).join('')+
       `<div class="npc-actions"><button type="button" class="create-item" id="npc-save">Lưu hồ sơ</button><span class="npc-notice" role="status">${escapeHtml(notice)}</span></div>`;
     const form=body.querySelector('#npc-profile-form');
     const courtesyInput=form.querySelector('#npc-courtesyName'),courtesyButton=body.querySelector('#npc-courtesy-ai');
@@ -81,7 +105,7 @@ function npcProfilesContext(limit=10){
   function saveProfile(profile){
     const updated=normalizeNpcProfile(readForm(profile),profile.speaker);
     // Stats are only re-rolled when the level actually changed.
-    if(updated.level===profile.level){updated.stats=profile.stats;if(profile.health!=null)updated.health=Math.min(profile.health,updated.stats.health)}
+    if(updated.level===profile.level){updated.stats=profile.stats;updated.equipment=profile.equipment;updated.skills=profile.skills;if(profile.health!=null)updated.health=Math.min(profile.health,npcEffectiveStats(updated).health)}
     npcProfiles.set(profile.speaker,updated);
     renderProfile(updated,'Đã lưu hồ sơ; truyện sẽ dùng thông tin này từ lượt sau.');
   }

@@ -1073,7 +1073,7 @@
             'fullName: họ và tên đầy đủ bằng âm Hán Việt có dấu (Vương Hạo, không viết Wáng Hào hay Wang Hao). Nếu truyện chỉ gọi bằng chức danh hoặc biệt danh, đặt họ tên hợp thời đại và giữ phần đã biết (ví dụ "Trưởng lão Từ" thì họ Từ). Nếu tên hiển thị trong truyện đang ở dạng bính âm, hãy chuyển sang Hán Việt.',
             'courtesyName: tên tự, nếu thời đại/thân phận có dùng tên tự; nếu không thì ghi "Không có".',
             'identity: thân phận, chức vụ, phe phái. appearance: ngoại hình, 1–2 câu. personality: tính cách, 1–2 câu.',
-            `level: 0 nếu là người thường chưa tu luyện; ngược lại từ 1 đến ${Math.max(worldRealms.length * 10, 1)}, tương xứng với thân phận và sức mạnh truyện đã thể hiện. Hệ thống cảnh giới: ${realms}. Nhân vật chính ${profile.name} đang ở ${profile.realm}. Chỉ số do hệ thống tự tính theo cấp độ, không cần ghi.`,
+            `level: 0 nếu là người thường chưa tu luyện; ngược lại từ 1 đến ${npcLevelCap()} (không được cao hơn nhân vật chính quá ${NPC_LEVEL_LEAD} cấp), tương xứng với thân phận và sức mạnh truyện đã thể hiện. Hệ thống cảnh giới: ${realms}. Nhân vật chính ${profile.name} đang ở ${profile.realm}. Chỉ số do hệ thống tự tính theo cấp độ, không cần ghi.`,
             npcProfilesContext(),
             `BỘ NHỚ CÁC CHƯƠNG TRƯỚC:\n${formatChapterMemory()}`,
             `DIỄN BIẾN GẦN ĐÂY:\n${formatRecentStoryContext(4000)}`
@@ -1166,13 +1166,21 @@
       npcProfiles.set(opponent, normalizeNpcProfile(await pendingNpcProfiles.get(opponent), opponent));
     }
     const npc = npcProfiles.get(opponent);
-    npc.health = Math.min(npc.health ?? npc.stats.health, npc.stats.health);
+    const npcStats = npcEffectiveStats(npc);
+    npc.health = Math.min(npc.health ?? npcStats.health, npcStats.health);
     const stats = effectiveStats();
     const result = simulateCombat(
       { name: profile.name, attack: stats.attack, defense: stats.defense, speed: stats.speed, maxHealth: maxHealth(), health: healthNow() },
-      { name: opponent, attack: npc.stats.attack, defense: npc.stats.defense, speed: npc.stats.speed, maxHealth: npc.stats.health, health: npc.health }
+      { name: opponent, attack: npcStats.attack, defense: npcStats.defense, speed: npcStats.speed, maxHealth: npcStats.health, health: npc.health }
     );
-    return { npc, result, script: combatScript(result) };
+    // What each side fights with, so every blow in the story can be named after a real technique or weapon.
+    const active = list => list.filter(item => item[3] !== false);
+    const arms = (name, gear, techniques) => `${name}: vũ khí/trang bị ${npcItemNames(gear)}; chiêu thức ${npcItemNames(techniques)}`;
+    const loadout = [
+      arms(profile.name, active(equipment).filter(item => item[4] !== 'mount'), active(skills).filter(item => ['attack', 'defense', 'speed', 'burstAttack', 'burstDefense', 'burstSpeed'].includes(item[4]))),
+      arms(opponent, npc.equipment || [], npc.skills || [])
+    ].join('\n');
+    return { npc, result, script: `${combatScript(result)}\nVŨ KHÍ VÀ CHIÊU THỨC HAI BÊN (mỗi đòn phải gọi tên chiêu thức hoặc vũ khí của người ra đòn; bên nào không có thì dùng quyền cước, binh khí thường):\n${loadout}` };
   }
 
   function applyCombatOutcome(combat) {
@@ -1183,7 +1191,7 @@
     npc.health = result.enemy.health;
     renderItems();
     const who = result.outcome === 'draw' ? 'bất phân thắng bại' : result.outcome === 'both' ? 'cả hai cùng gục' : `${result.winner} thắng`;
-    return `Giao chiến với ${npc.speaker}: ${result.strikes.length} đòn, ${who}. Ngươi mất ${lost.toLocaleString('vi-VN')} máu (${healthNow().toLocaleString('vi-VN')} / ${maxHealth().toLocaleString('vi-VN')}); ${npc.speaker} còn ${npc.health.toLocaleString('vi-VN')} / ${npc.stats.health.toLocaleString('vi-VN')} máu.`;
+    return `Giao chiến với ${npc.speaker}: ${result.strikes.length} đòn, ${who}. Ngươi mất ${lost.toLocaleString('vi-VN')} máu (${healthNow().toLocaleString('vi-VN')} / ${maxHealth().toLocaleString('vi-VN')}); ${npc.speaker} còn ${npc.health.toLocaleString('vi-VN')} / ${npcEffectiveStats(npc).health.toLocaleString('vi-VN')} máu.`;
   }
 
   async function playAI() {
