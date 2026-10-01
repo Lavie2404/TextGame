@@ -616,21 +616,56 @@
       const subject = afterMatch?.[1] || beforeMatch?.[1] || '';
       return invalidNames.test(subject) ? '' : subject;
     }
-    function inferSpeaker(before, after) {
-      before = before.replace(/\*\*/g, '');
-      const subject = speechAttribution(before, after);
-      if (!subject) return '';
+    // A pronoun keeps pointing at whoever it last resolved to in this turn.
+    const pronounTargets = new Map();
+    const pronounKey = value => value.toLocaleLowerCase('vi').replace(/\s+ấy$/u, '');
+    // Resolve a subject (name or pronoun) to a character name, '' when unsure.
+    function resolveSubject(subject, before) {
+      if (!subject || invalidNames.test(subject)) return '';
       if (/^(?:Ngươi|Bạn|Nhân vật chính)$/iu.test(subject)) return playerName;
       if (!new RegExp(`^${pronoun}$`, 'iu').test(subject)) return subject;
-      return recentPerson(before, /nàng/iu.test(subject) ? 'female' : 'male');
+      const key = pronounKey(subject);
+      const person = recentPerson(before.replace(/\*\*/g, ''), /nàng/iu.test(subject) ? 'female' : 'male') || pronounTargets.get(key) || '';
+      if (person) pronounTargets.set(key, person);
+      return person;
+    }
+    function inferSpeaker(before, after) {
+      return resolveSubject(speechAttribution(before, after), before);
+    }
+    // A quote with no speech verb beside it is still speech when it reads as a
+    // sentence: ends like one, runs long, or addresses someone (ta, ngươi…).
+    const addressing = /(?:^|[^\p{L}])(?:ta|ngươi|ngài|huynh|muội|các hạ|tại hạ|lão phu|chúng ta|bọn ta|các ngươi)(?=$|[^\p{L}])/iu;
+    const looksLikeUtterance = value => /^\p{Lu}/u.test(value) && (/[.!?…]$/u.test(value) || value.split(/\s+/).length >= 7 || addressing.test(value));
+    let lastSpeaker = '';
+    let lastSpeakerEnd = -1;
+    // Who an unattributed utterance belongs to: the subject of the sentence
+    // just before it, else whoever spoke last in this paragraph.
+    function impliedSpeaker(before, matchIndex) {
+      const lead = before.replace(/\*\*/g, '').replace(/<[^>]*>|[“”"「」‘’']/g, ' ').trimEnd();
+      const sentence = lead.split(/(?<=[.!?…:：])\s*/u).map(part => part.trim()).filter(Boolean).at(-1) || '';
+      const subject = sentence.match(new RegExp(`^(${anyPronoun}|[\\p{Lu}][\\p{L}]+(?:[ \\t]+[\\p{Lu}][\\p{L}]+){1,3})(?=$|[^\\p{L}])`, 'u'))?.[1] || '';
+      const resolved = resolveSubject(subject, before);
+      if (resolved) return resolved;
+      if (lastSpeaker && !/\n/.test(text.slice(lastSpeakerEnd, matchIndex))) return lastSpeaker;
+      return requireSpeaker('', subject);
+    }
+    function emitDialogue(speaker, content, end) {
+      lastSpeaker = speaker;
+      lastSpeakerEnd = end;
+      if (speaker !== playerName) lastNpc = speaker;
+      output += `<dialogue speaker="${speaker}">${content.replace(/[\s,;]+$/u, '')}</dialogue>`;
     }
     // Resolve a third-person pronoun to the most recent named character before the utterance, never a place
     // ("kinh thành Gia Cát") and never the player, who is "ngươi" in second-person narration. A character
     // introduced with a matching marker ("nàng Lữ Thanh Tuyền" for "nàng hỏi") wins over a more recent bare name.
+    // Names inside a relational phrase ("con gái của X", "dưới quyền X") only
+    // describe someone else, so a pronoun never resolves to them.
+    const relational = /(?:của|dưới quyền|dưới trướng|thuộc|theo|theo lệnh|phe|nhà|quân|họ|cùng với|cùng|với|bên cạnh|bên|cho|về|từ)\s*$/iu;
     function recentPerson(before, gender = '') {
       const mentions = nameMentions(before), places = placeNames(mentions);
-      const people = mentions.filter(mention => mention.name !== playerName && !places.has(mention.name));
-      const opposite = gender === 'female' ? 'male' : 'female';
+      const people = mentions.filter(mention => mention.name !== playerName && !places.has(mention.name)
+        && !relational.test(before.slice(Math.max(0, mention.index - 24), mention.index)));
+      const opposite = gender ? (gender === 'female' ? 'male' : 'female') : '';
       const genderOf = name => people.find(mention => mention.name === name && ['female', 'male'].includes(mention.kind))?.kind || '';
       const matching = gender ? people.filter(mention => genderOf(mention.name) === gender) : [];
       return (matching.at(-1) || people.filter(mention => genderOf(mention.name) !== opposite).at(-1))?.name || '';
@@ -646,33 +681,30 @@
         const after = text.slice(dialoguePattern.lastIndex, dialoguePattern.lastIndex + 180);
         const subject = soundOnly.test(spokenText) ? '' : speechAttribution(before, after);
         cursor = dialoguePattern.lastIndex;
-        if (!subject) { output += match[0]; continue; }
+        if (!subject) {
+          if (soundOnly.test(spokenText) || !looksLikeUtterance(spokenText)) { output += match[0]; continue; }
+          emitDialogue(impliedSpeaker(before, match.index), spokenText, cursor);
+          continue;
+        }
         const speaker = requireSpeaker(inferSpeaker(before, after), subject);
         // The bubble already names the speaker, so drop a bare tag clause
         // ("Lâm Tuyết hỏi." / "Lâm Tuyết khẽ nói:") instead of leaving it dangling.
         const clause = `(?:${anyPronoun}|${name})${modifiers}\\s+${attribution}`;
         output = output.replace(new RegExp(`(^|[.!?…>]\\s+|\\n)${clause}\\s*[:：]\\s*$`, 'u'), '$1');
         const tail = after.match(new RegExp(`^\\s*[,—–-]?\\s*${clause}\\s*[.!…]+(?=\\s|$)`, 'u'));
-        output += `<dialogue speaker="${speaker}">${spokenText}</dialogue>`;
+        emitDialogue(speaker, spokenText, cursor);
+        // A clause that goes on after the quote (“...”, ngươi đáp, rồi quay lưng.) is
+        // capitalised into its own sentence later by capitalizeAfterDialogue.
         if (tail) dialoguePattern.lastIndex = cursor += tail[0].length;
-        else {
-          // A clause that goes on after the quote (“...”, ngươi đáp, rồi quay
-          // lưng.) becomes its own narration sentence: Ngươi đáp, rồi quay lưng.
-          const joint = text.slice(cursor).match(/^\s*[,;—–-]+\s*(?=\p{Ll})/u);
-          if (joint) {
-            cursor += joint[0].length;
-            output += ` ${text[cursor].toLocaleUpperCase('vi')}`;
-            dialoguePattern.lastIndex = ++cursor;
-          }
-        }
         continue;
       }
       const content = match[0].replace(/^<dialogue\b[^>]*>/i, '').replace(/<\/dialogue\s*>$/i, '').trim();
       const declared = match[0].match(/speaker\s*=\s*(["'])(.*?)\1/i)?.[2]?.trim() || '';
       if (soundOnly.test(content)) output += content;
       else if (!declared || invalidNames.test(declared) || new RegExp(`^${pronoun}$`, 'iu').test(declared)) {
-        const resolved = requireSpeaker(inferSpeaker(text.slice(Math.max(0, match.index - 1200), match.index), text.slice(dialoguePattern.lastIndex, dialoguePattern.lastIndex + 180)), declared);
-        output += `<dialogue speaker="${resolved}">${content}</dialogue>`;
+        const before = text.slice(Math.max(0, match.index - 1200), match.index);
+        const inferred = inferSpeaker(before, text.slice(dialoguePattern.lastIndex, dialoguePattern.lastIndex + 180)) || (declared ? '' : impliedSpeaker(before, match.index));
+        emitDialogue(requireSpeaker(inferred, declared), content, dialoguePattern.lastIndex);
       } else {
         // The model sometimes tags a place it has just mentioned as the speaker ("kinh thành Gia Cát" →
         // speaker="Gia Cát"); give the line to whoever the narration beside it points at instead.
@@ -681,8 +713,8 @@
           ? inferSpeaker(before, text.slice(dialoguePattern.lastIndex, dialoguePattern.lastIndex + 180)) || recentPerson(before)
           : '';
         const speaker = person || declared;
-        output += person ? `<dialogue speaker="${speaker}">${content}</dialogue>` : match[0];
-        if (speaker !== playerName) lastNpc = speaker;
+        if (person) emitDialogue(speaker, content, dialoguePattern.lastIndex);
+        else { output += match[0]; lastSpeaker = speaker; lastSpeakerEnd = dialoguePattern.lastIndex; if (speaker !== playerName) lastNpc = speaker; }
       }
       cursor = dialoguePattern.lastIndex;
     }
