@@ -1,5 +1,9 @@
 (() => {
   const OLLAMA_URL = 'http://127.0.0.1:11434';
+  // One context size for every call: Ollama reloads the model whenever num_ctx changes between requests.
+  // 8192 keeps the full rule set, chapter history and NPC profiles in view; its KV cache (~1.3 GB for a 14B
+  // model) still fits beside the weights on a 12 GB GPU.
+  const OLLAMA_NUM_CTX = 8192;
   const modelInput = document.querySelector('#ai-model');
   const status = document.querySelector('#ai-status');
   const help = document.querySelector('#ai-help');
@@ -130,7 +134,7 @@
           think: false,
           stream: false,
           keep_alive: '10m',
-          options: { temperature: 0.2, top_p: 0.8, num_predict: 220 }
+          options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0.2, top_p: 0.8, num_predict: 220 }
         })
       }, 120000);
       const data = await response.json();
@@ -247,7 +251,7 @@
           think: false,
           stream: false,
           keep_alive: '10m',
-          options: { temperature: 0, num_predict: 20 }
+          options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0, num_predict: 20 }
         })
       }, 180000);
       const data = await response.json();
@@ -279,7 +283,7 @@
           think: false,
           stream: false,
           keep_alive: '10m',
-          options: { temperature: 0.2, top_p: 0.8, repeat_penalty: 1.15, num_predict: 900 }
+          options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0.2, top_p: 0.8, repeat_penalty: 1.15, num_predict: 900 }
         })
       }, 180000);
       const data = await response.json();
@@ -852,7 +856,7 @@
             think: false,
             stream: false,
             keep_alive: '10m',
-            options: { temperature: 0, num_predict: 60 + unknown.length * 40 }
+            options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0, num_predict: 60 + unknown.length * 40 }
           })
         }, 120000);
         const data = await response.json();
@@ -964,7 +968,7 @@
           think: false,
           stream: false,
           keep_alive: '10m',
-          options: { temperature: 0.85, top_p: 0.92, repeat_penalty: 1.18, repeat_last_n: 512, num_predict: -1 }
+          options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0.85, top_p: 0.92, repeat_penalty: 1.18, repeat_last_n: 512, num_predict: -1 }
         })
       }, 600000);
       const data = await response.json();
@@ -1017,7 +1021,7 @@
         think: false,
         stream: false,
         keep_alive: '10m',
-        options: { temperature: 0.4, top_p: 0.85, num_predict: 800 }
+        options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0.4, top_p: 0.85, num_predict: 800 }
       })
     }, 180000);
     const data = await response.json();
@@ -1081,7 +1085,7 @@
           think: false,
           stream: false,
           keep_alive: '10m',
-          options: { temperature: 0.65, top_p: 0.85, repeat_penalty: 1.18, repeat_last_n: 512, num_predict: 6000 }
+          options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0.65, top_p: 0.85, repeat_penalty: 1.18, repeat_last_n: 512, num_predict: 6000 }
         })
       }, 600000);
       const data = await response.json();
