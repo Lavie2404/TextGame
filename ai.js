@@ -1114,23 +1114,24 @@
           { role: 'user', content: [
             `THẾ GIỚI: ${profile.setting || profile.worldName}`,
             `YÊU THÚ: truyện gọi là "${foe.opponent}", loài ${foe.species}${foe.transformed ? ', đã hóa hình thành người' : ''}.`,
-            'name: tên loài theo đặc tính nổi bật nhất mà truyện đã tả (màu sắc, vảy lông, tốc độ, nguyên tố, huyết mạch…), 3 chữ Hán Việt, chữ cuối là loài: ví dụ Tật Phong Lang (sói nhanh như gió, điều khiển gió), Bích Lân Xà (rắn vảy ngọc bích), Bạch Long Mã (ngựa trắng có sừng và huyết mạch rồng), Xích Viêm Hổ (hổ lửa đỏ). Nếu truyện đã gọi nó bằng một tên riêng kiểu đó thì giữ nguyên.',
-            'trait: đặc tính ấy, một cụm ngắn (ví dụ: lông xám bạc, nhanh như gió, điều khiển được gió).',
-            'signatureMove: một đòn đặc trưng sinh ra từ đặc tính, 2–5 chữ, hợp với loài (ví dụ: gọi cuồng phong; phun độc ngọc bích; sừng rồng húc lôi). Yêu thú tầm thường không có đặc tính thì để rỗng.',
+            'name: tên loài theo đặc tính nổi bật nhất mà truyện đã tả, 3 chữ Hán Việt, chữ cuối là loài (Lang, Xà, Hổ, Mã, Điêu, Long, Hầu, Ngưu, Thử…), hai chữ đầu chỉ đúng đặc điểm bằng từ Hán Việt: màu sắc (Bích, Xích, Bạch, Hắc, Kim, Thanh, Tử), bộ phận (Lân = vảy, Giác = sừng, Dực = cánh, Trảo = vuốt, Nha = nanh), tốc độ/gió (Tật Phong), nguyên tố (Viêm, Lôi, Băng, Thủy), huyết mạch (Long, Phượng). Ví dụ: rắn vảy xanh biếc → Bích Lân Xà; sói nhanh như gió → Tật Phong Lang; ngựa trắng có sừng rồng → Bạch Long Mã; hổ lửa đỏ → Xích Viêm Hổ. Nếu truyện đã gọi nó bằng một tên kiểu này thì giữ nguyên.',
+            'trait: đặc tính ấy, một cụm ngắn (ví dụ: vảy xanh biếc, phun sương độc).',
+            'signatureMove: TÊN CHIÊU đặc trưng sinh ra từ đặc tính, là tên công pháp bằng Hán Việt 2–4 chữ, viết hoa mỗi chữ, thường lấy lại chữ trong tên loài; KHÔNG viết câu mô tả. Ví dụ: Bích Lân Xà → Bích Lân Độc Vụ; Tật Phong Lang → Phong Nhận; Bạch Long Mã → Long Giác Lôi Xung; Xích Viêm Hổ → Viêm Trảo. Yêu thú tầm thường không có đặc tính thì để rỗng.',
+            'signatureEffect: chính chiêu đó làm gì, một câu ngắn để người kể tả được, viết riêng cho con thú này theo đặc tính của nó, không chép lại ví dụ (mẫu, với Bích Lân Độc Vụ: phun màn sương độc màu ngọc bích bao trùm đối thủ).',
             `DIỄN BIẾN GẦN ĐÂY:\n${recentStory}`
           ].join('\n\n') }
         ],
-        format: { type: 'object', properties: { name: { type: 'string' }, trait: { type: 'string' }, signatureMove: { type: 'string' } }, required: ['name', 'trait', 'signatureMove'] },
+        format: { type: 'object', properties: { name: { type: 'string' }, trait: { type: 'string' }, signatureMove: { type: 'string' }, signatureEffect: { type: 'string' } }, required: ['name', 'trait', 'signatureMove', 'signatureEffect'] },
         think: false,
         stream: false,
         keep_alive: '10m',
-        options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0.6, top_p: 0.9, num_predict: 80 }
+        options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0.6, top_p: 0.9, num_predict: 120 }
       })
     }, 120000);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
     const parsed = JSON.parse(data.message?.content?.match(/\{[\s\S]*\}/)?.[0] || '{}');
-    return { name: String(parsed.name || '').replace(/\s+/g, ' ').trim(), trait: String(parsed.trait || '').trim(), signatureMove: String(parsed.signatureMove || '').trim() };
+    return { name: String(parsed.name || '').replace(/\s+/g, ' ').trim(), trait: String(parsed.trait || '').trim(), signatureMove: String(parsed.signatureMove || '').trim(), signatureEffect: String(parsed.signatureEffect || '').trim() };
   };
 
   // A courtesy name (tên tự) for an NPC whose profile has none, fitting the world and the person.
