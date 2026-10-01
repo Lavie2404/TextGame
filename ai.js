@@ -848,6 +848,8 @@
     return `XƯNG HÔ TRONG LỜI THOẠI NHẤT QUÁN: Mỗi người nói chọn đúng một cặp xưng hô hợp với quan hệ, tuổi tác và địa vị so với người nghe, rồi giữ nguyên cặp đó trong cả câu thoại và các lượt sau: ta–ngươi (ngang hàng hoặc bề trên nói với bề dưới), tại hạ–các hạ (lịch sự giữa người lạ), huynh–đệ, tỷ–muội, lão phu–tiểu tử, cháu–ông/bác, con–cha/mẹ, thiếp–chàng, thuộc hạ–chủ công. Hai vế của cặp phải khớp vai: đã xưng "cháu", "con", "thuộc hạ" thì gọi người nghe là "ông", "bác", "cha", "chủ công", không gọi là "ngươi"; đã gọi người nghe là "ngươi" thì xưng "ta", "lão phu", "bổn tọa", không xưng "cháu" hay "con". Mẫu sai: "Cháu ở đây đợi ngươi suốt cả ngày." Mẫu đúng: "Ta ở đây đợi ngươi suốt cả ngày." hoặc "Cháu ở đây đợi bác suốt cả ngày." Khi gọi tên người khác trong thoại, viết đúng từng chữ tên đã xác lập; tên nhân vật người chơi là ${profile.name}, không viết thành dạng khác. Trước khi trả lời, rà lại từng câu thoại xem xưng hô có đổi vai giữa chừng không.`;
   }
 
+  const combatRule = 'GIAO CHIẾN PHẢI KỂ RÕ TỪNG ĐƯỜNG: Khi có đánh nhau, không được tóm tắt kiểu "trận chiến bắt đầu" hay "hai người giao đấu một hồi". Kể theo từng hiệp, mỗi hiệp gồm đủ bốn ý: (1) ai ra tay, bằng chiêu gì (gọi tên chiêu thức hoặc tả rõ động tác, vũ khí, hướng đánh; nhân vật chính chỉ dùng kỹ năng và trang bị đang có, người thường chưa tu luyện thì chỉ có quyền cước, binh khí thường); (2) chiêu đó nhắm vào đâu và uy lực ra sao; (3) đối thủ ứng phó thế nào: né tránh, đỡ đòn, phản công hay chịu đòn, và vì sao; (4) kết quả thật: trúng hay hụt, bị thương ở đâu, nặng nhẹ, mất thế hay giữ thế. Ít nhất 3 hiệp qua lại mỗi lượt có giao chiến; chênh lệch cấp độ và chỉ số (Công kích, Phòng ngự, Tốc độ, Máu) phải thể hiện trong kết quả từng hiệp. Kết thúc đoạn giao chiến phải nêu rõ trạng thái hai bên: còn đứng được không, thương tích, ai thắng thế, trận đánh đã kết thúc hay còn tiếp diễn. Nếu người chơi chỉ mới khơi mào hoặc nhận lời đánh, hãy kể hiệp đầu tiên ngay trong lượt này thay vì dừng ở lời hẹn.';
+
   const hiddenGoalRule = 'MỤC TIÊU LÀ ĐỘNG CƠ THẦM KÍN, KHÔNG BAO GIỜ NÓI RA: MỤC TIÊU và BƯỚC TIẾP THEO chỉ là định hướng cho người dẫn truyện để sắp xếp tình tiết; chúng tồn tại trong đầu nhân vật chính, không tồn tại trong thế giới truyện. Tuyệt đối không nhắc nguyên văn hay diễn đạt lại mục tiêu trong lời kể, trong lời thoại của nhân vật chính hay của bất kỳ NPC nào; không để nhân vật chính tuyên bố, tâm sự, nói bóng gió hay tự nhủ thành tiếng về mục tiêu; NPC không biết và không được đoán ra mục tiêu trừ khi chính hành động người chơi nhập vào đã nói ra. Hãy thể hiện mục tiêu bằng việc làm: nhân vật chính âm thầm chọn nơi đến, người làm quen, câu hỏi đặt ra, ân tình gây dựng, mỗi lượt tiến thêm một bước nhỏ và kín đáo. Mẫu sai: "Ta tới đây để dựng hậu cung mỹ nhân." Mẫu đúng: nhân vật chính hỏi thăm nàng về gia cảnh, giúp nàng một việc nhỏ, ghi nhớ nơi nàng ở. Những mục tiêu tai tiếng hay nguy hiểm nếu bị nói ra phải mang hậu quả thật: bị khinh ghét, tố cáo, truy bắt.';
 
   const coherentProseRule = 'VIẾT CÓ NGHĨA VÀ ĐÚNG BỐI CẢNH: Mỗi câu phải rõ chủ thể, hành động và đối tượng; lời thoại phải có mục đích phù hợp tình huống. Địa danh, phe phái, chức danh phải nhất quán với thế giới và thời kỳ đã chọn. Không ghép tên tùy tiện thành địa danh hoặc tổ chức như "biên giới Mạnh", "Mạnh Tông" khi chưa được xác lập. Với nhân vật lịch sử, không tự đổi phe phái hoặc vai trò nếu người chơi chưa thiết lập lịch sử thay thế. Nếu chưa đủ dữ kiện, dùng mô tả địa điểm rõ ràng như "bìa rừng phía bắc doanh trại", không bịa tên như một sự thật đã biết. Địa danh hư cấu mới phải được giới thiệu quan hệ với nơi hiện tại và vai trò trong tình huống. Trước khi trả lời, rà lại tên riêng, ý nghĩa câu và sự liên kết giữa lời kể với lời thoại. Trong lời kể, mọi tên nhân vật đều viết trong cặp **...** mỗi lần xuất hiện (ví dụ: **Lâm Tuyết** khẽ gật đầu); có thể dùng thêm **thân phận**, **cảnh giới** để nhấn mạnh chọn lọc; không bọc cả đoạn hoặc dùng các kiểu Markdown khác. Người nói trong thẻ thoại phải là chính nhân vật vừa được kể là đang nói, không lấy địa danh hay tên người khác vừa nhắc tới làm speaker.';
@@ -943,12 +945,12 @@
         ? 'Nhân vật đang tu Tử Linh thuật nên có thu xác: mỗi con thú hoặc kẻ địch bị hạ mà xác còn nguyên ghi thêm 1 "thi thể động vật" hoặc "thi thể người", ví dụ "thi thể động vật: 2". Thi thể không mua được ở đâu, chỉ có từ những lần hạ địch như vậy. Không ghi máu: nhân vật không thu thập máu.'
         : 'Không ghi máu hay thi thể nguyên vẹn vào dòng này: nhân vật không tu pháp môn cần chúng nên không thu thập.';
     return [
-      'CHIẾN LỢI PHẨM (BẮT BUỘC): Sau phần truyện, viết thêm đúng một dòng cuối cùng, tách riêng, theo mẫu "[CHIẾN LỢI PHẨM] tên: số lượng đơn vị; tên: số lượng đơn vị" liệt kê những gì có thể thu từ yêu thú, động vật hoặc kẻ địch mà nhân vật người chơi đã hạ trong lượt này; tên và số lượng phải hợp với sự việc vừa kể.',
+      'CHIẾN LỢI PHẨM: Chỉ khi trong lượt này nhân vật người chơi đã HẠ GỤC xong yêu thú, động vật hoặc kẻ địch (trận đánh đã kết thúc, đối thủ chết, bị bắt hoặc bỏ chạy) thì sau phần truyện mới viết thêm đúng một dòng cuối cùng, tách riêng, theo mẫu "[CHIẾN LỢI PHẨM] tên: số lượng đơn vị; tên: số lượng đơn vị" liệt kê những gì có thể thu từ kẻ vừa bị hạ; tên và số lượng phải hợp với sự việc vừa kể. Trận đánh chưa bắt đầu, mới khơi mào, đang diễn ra hoặc lượt không có giao chiến thì TUYỆT ĐỐI KHÔNG viết dòng này, cũng không viết "[CHIẾN LỢI PHẨM] không".',
       'Yêu thú và động vật bị hạ luôn cho thịt, da, nanh, vuốt, sừng, lông… của chính loài đó; ví dụ hạ 2 con sói: "[CHIẾN LỢI PHẨM] thịt sói: 20 cân; da sói: 2 tấm; nanh sói: 4; vuốt sói: 8". Người bị hạ không cho thịt, da hay nanh; với người chỉ ghi tiền hoặc vật họ mang theo.',
       'Tiền, độc thảo, oán phù và mọi vật phẩm khác chỉ là thứ có thể rơi: hợp lý thì cứ ghi vào dòng này (tiền ghi "tiền: 30 đồng"), hệ thống sẽ tung tỷ lệ để quyết định có rơi thật hay không. Số lượng ghi trong dòng này là mức tối đa có thể thu; hệ thống tự tung số thực nhận. Vì vậy trong lời kể không viết rằng nhân vật đã lấy được tiền hay vật phẩm từ kẻ vừa bị hạ, cũng không nêu con số chiến lợi phẩm cụ thể.',
       special,
       'Thứ chắc chắn nhận vì được tặng, trả công hoặc mua trong truyện thì ghi ở một dòng riêng ngay phía trên: "[NHẬN ĐƯỢC] tên: số lượng đơn vị"; không có thì bỏ dòng đó.',
-      'Không ghi trang bị, kỹ năng hay tu vi. Lượt không hạ được gì thì ghi "[CHIẾN LỢI PHẨM] không". Không viết gì sau dòng [CHIẾN LỢI PHẨM].'
+      'Không ghi trang bị, kỹ năng hay tu vi. Không viết gì sau dòng [CHIẾN LỢI PHẨM].'
     ].join(' ');
   }
 
@@ -967,6 +969,7 @@
       namedDialogueRule,
       addressRule(profile),
       hiddenGoalRule,
+      combatRule,
       hanVietRule,
       coherentProseRule,
       lootRule(),
@@ -1003,6 +1006,7 @@
                 namedDialogueRule,
                 addressRule(profile),
                 hiddenGoalRule,
+                combatRule,
                 hanVietRule,
                 coherentProseRule,
                 'ĐỊNH DẠNG BẮT BUỘC: Mọi câu được nhân vật nói ra phải là <dialogue speaker="Tên nhân vật">Lời nói</dialogue>, kể cả thoại của nhân vật chính. Không viết câu thoại trong ngoặc kép ngoài thẻ và không gắn thoại vào đoạn kể. Ví dụ đúng: Mưa quất lên mái ngói. <dialogue speaker="Lâm Tuyết">Huynh nghe thấy tiếng động không?</dialogue> Ví dụ sai: Mưa quất lên mái ngói. “Huynh nghe thấy tiếng động không?” nàng hỏi. Âm thanh như “phịch”, “vù”, “rầm”, “keng” là lời kể, không phải lời thoại; tên gọi, danh xưng hay thuật ngữ nhắc giữa câu kể cũng vậy. Muốn làm nổi bật chúng thì viết trong cặp **...** (ví dụ: **Đấu Tông sơ kỳ**), không dùng dấu ngoặc kép hay ngoặc đơn. Chỉ viết tiếng Việt bằng chữ Quốc ngữ; tuyệt đối không có chữ Hán hay từ viết bằng chữ Hán. Hãy tự rà soát toàn bộ đầu ra trước khi kết thúc.',
@@ -1154,7 +1158,7 @@
       `CÁC LƯỢT ĐÃ KỂ TRONG CHƯƠNG ${chapterState.chapterNumber} (không kể lại):\n${formatCurrentChapterContext()}`,
       `HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI (bắt buộc kể lại đầy đủ, đúng thứ tự, ngay đầu lượt):\n${action}`,
       surprise ? 'Hãy thêm một tình tiết bất ngờ hợp lý, có dấu hiệu gieo trước và không giải quyết mọi việc quá dễ dàng.' : '',
-      'YÊU CẦU LƯỢT NÀY: Tiếp tục liền mạch từ câu cuối cùng trong diễn biến gần đây. Mở đầu bằng việc kể lại toàn bộ hành động và lời thoại người chơi vừa nhập: tường thuật được viết lại cho giàu hình ảnh và hợp ngữ cảnh, lời thoại được trau chuốt câu chữ nhưng giữ nguyên ý, không bỏ sót câu nào, đặt trong thẻ <dialogue speaker="..."> đúng người nói. Chỉ sau đó mới viết phản ứng, lời đáp và hệ quả. Nếu đó là câu hỏi, hãy để đúng người được hỏi trả lời chính xác câu hỏi trước khi mở rộng cảnh. Không đưa thêm sự kiện ngoài mạch. Kết thúc bằng dòng [CHIẾN LỢI PHẨM] theo đúng mẫu.'
+      'YÊU CẦU LƯỢT NÀY: Tiếp tục liền mạch từ câu cuối cùng trong diễn biến gần đây. Mở đầu bằng việc kể lại toàn bộ hành động và lời thoại người chơi vừa nhập: tường thuật được viết lại cho giàu hình ảnh và hợp ngữ cảnh, lời thoại được trau chuốt câu chữ nhưng giữ nguyên ý, không bỏ sót câu nào, đặt trong thẻ <dialogue speaker="..."> đúng người nói. Chỉ sau đó mới viết phản ứng, lời đáp và hệ quả. Nếu đó là câu hỏi, hãy để đúng người được hỏi trả lời chính xác câu hỏi trước khi mở rộng cảnh. Không đưa thêm sự kiện ngoài mạch. Chỉ kết thúc bằng dòng [CHIẾN LỢI PHẨM] nếu trong lượt này đã hạ gục xong kẻ địch; nếu không thì không có dòng đó.'
     ].filter(Boolean).join('\n\n');
 
     turnButton.disabled = true;
@@ -1196,7 +1200,7 @@
         help.textContent = 'Model bỏ sót phần người chơi nhập; đang yêu cầu viết lại…';
         const retry = await requestTurn([
           { role: 'assistant', content: raw },
-          { role: 'user', content: `Phần truyện trên đã BỎ SÓT ${missing.map(describeEntry).join('; ')}. Viết lại toàn bộ lượt này từ đầu, kể lại đầy đủ mọi hành động và lời thoại người chơi theo đúng thứ tự (có thể trau chuốt câu chữ, không được bỏ ý hay bỏ câu), rồi mới đến phản ứng và hệ quả. Giữ nguyên định dạng thẻ <dialogue> và dòng [CHIẾN LỢI PHẨM].` }
+          { role: 'user', content: `Phần truyện trên đã BỎ SÓT ${missing.map(describeEntry).join('; ')}. Viết lại toàn bộ lượt này từ đầu, kể lại đầy đủ mọi hành động và lời thoại người chơi theo đúng thứ tự (có thể trau chuốt câu chữ, không được bỏ ý hay bỏ câu), rồi mới đến phản ứng và hệ quả. Giữ nguyên định dạng thẻ <dialogue>; dòng [CHIẾN LỢI PHẨM] chỉ có khi đã hạ gục xong kẻ địch.` }
         ]);
         const stillMissing = missingPlayerEntries(retry, entries);
         if (stillMissing.length <= missing.length) { raw = retry; missing = stillMissing; }

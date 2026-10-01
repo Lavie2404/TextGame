@@ -1,12 +1,14 @@
 // Loot: every AI turn ends with "[CHIẾN LỢI PHẨM] tên: số lượng đơn vị; …" (or "… không") listing what defeated
 // creatures and enemies may yield, optionally preceded by "[NHẬN ĐƯỢC] …" for things given, paid or bought in the story.
 // Coins and demonic materials go to their own counters; everything else is kept here as generic loot.
-const LOOT_MARKER=/^\W{0,3}\s*(CHIẾN LỢI PHẨM|NHẬN ĐƯỢC)\W{0,3}\s*(.*)$/imu;
+const LOOT_MARKER=/^[^\p{L}\p{N}\n]{0,6}(CHIẾN LỢI PHẨM|NHẬN ĐƯỢC)[^\p{L}\p{N}\n]{0,6}(.*)$/imu;
 const lootItems={};// name -> {count, unit}
 function resetLoot(){Object.keys(lootItems).forEach(name=>delete lootItems[name])}
 // Splits the loot lines off a story reply; returns the story without them plus the parsed entries.
 // Entries from [NHẬN ĐƯỢC] are marked certain: they skip the drop roll.
 function extractLoot(text){
+  // Markers must sit at a line start to be found; push one the model glued onto a paragraph onto its own line.
+  text=text.normalize('NFC').replace(/[ \t]*(\**\[?\s*(?:CHIẾN LỢI PHẨM|NHẬN ĐƯỢC)\s*\]?\**\s*[:：]?)/giu,'\n$1');
   const lines=text.split('\n'),seen=new Set();
   let entries=[];
   for(let i=lines.length-1;i>=0;i--){
