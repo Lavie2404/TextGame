@@ -32,6 +32,33 @@ function npcEffectiveStats(profile){
   for(const key of Object.keys(stats))stats[key]=Math.floor(stats[key]);
   return stats;
 }
+// Beasts that have not taken human form fight with what their kind is born with. Matched on the species
+// the classifier names (loài), longest keyword first; anything unknown falls back to teeth and claws.
+const BEAST_REPERTOIRE=[
+  [['rắn','mãng xà','trăn','xà','độc xà'],['phun nọc độc','mổ nhanh như chớp','quấn quanh người rồi siết chặt','quật đuôi']],
+  [['sói','hổ','sư tử','báo','gấu','lang','hồ ly','cáo','chó','mèo','linh miêu','tê tê'],['vuốt cào','vồ tới','cắn xé','húc ngã','nhảy bổ từ sườn']],
+  [['khỉ','vượn','tinh tinh','viên','hầu'],['vung gậy','múa trường côn','nhảy nhót né đòn','đấm bằng hai chi trước','cắn']],
+  [['chim','ưng','điêu','hạc','phượng','quạ','đại bàng','cú','kên kên','bằng'],['mổ bằng mỏ','bổ nhào từ trên cao','chụp bằng vuốt','quạt cánh tạo gió']],
+  [['rồng','giao long','long','thuồng luồng','giao'],['vuốt rồng cào','quật đuôi','phun hỏa diễm','gọi lôi điện','dâng sóng nước','long tức trấn áp']],
+  [['trâu','bò','ngựa','hươu','nai','tê giác','dê','lợn rừng','heo rừng','voi'],['húc bằng sừng','đá hậu','giẫm đạp','lao thẳng tới']],
+  [['cá sấu'],['đớp bằng hàm','quật đuôi','xoay tròn tử vong','lao từ dưới nước lên']],
+  [['cá','thủy quái','rùa','cua','tôm','ếch','ngao'],['quật đuôi','phun nước','kẹp bằng càng','rụt vào mai cứng','lao từ dưới nước lên']],
+  [['nhện','bọ cạp','rết','ong','bọ','trùng','côn trùng'],['chích nọc độc','phun tơ trói','kẹp bằng càng','bu kín']]
+];
+function beastAttacks(species){
+  const lower=String(species||'').toLocaleLowerCase('vi');
+  const match=BEAST_REPERTOIRE.map(([keys,moves])=>[keys.filter(key=>lower.includes(key)).sort((x,y)=>y.length-x.length)[0],moves]).filter(([key])=>key).sort((x,y)=>y[0].length-x[0].length)[0];
+  return match?match[1]:['cắn','vồ','húc','cào'];
+}
+// A beast's profile is built here, not by the model: level from the threat the classifier judged, stats
+// rolled like any character, gear only once it has taken human form.
+function makeBeastProfile(name,species,transformed,threat){
+  const base=Math.max(0,playerLevel()),offset=threat==='mạnh'?randomInt(2,NPC_LEVEL_LEAD):threat==='yếu'?randomInt(-6,-2):randomInt(-2,2);
+  const level=Math.min(npcLevelCap(),Math.max(1,base+offset));
+  const profile=normalizeNpcProfile({fullName:name,courtesyName:'Không có',identity:`Yêu thú loài ${species}${transformed?', đã hóa hình thành người':', chưa hóa hình'}`,appearance:'Chưa rõ',personality:'Hoang dã, hiếu chiến',level},name);
+  if(!transformed){profile.equipment=[];profile.skills=[]}
+  return {...profile,beast:true,species,transformed,naturalAttacks:transformed?[]:beastAttacks(species)};
+}
 const npcItemNames=items=>(items||[]).map(item=>`${item[0]} (${item[1]}, cấp ${item[6]})`).join(', ')||'không có';
 // Stats follow the same rolling rules as the player (rollCharacterStats in item-rules.js); gear and techniques are rolled fresh.
 function normalizeNpcProfile(raw,speaker){
@@ -48,7 +75,7 @@ function normalizeNpcProfile(raw,speaker){
 function npcProfilesContext(limit=10){
   const known=[...npcProfiles.values()].slice(-limit);
   if(!known.length)return 'HỒ SƠ NPC ĐÃ XÁC LẬP: chưa có.';
-  return `HỒ SƠ NPC ĐÃ XÁC LẬP (giữ đúng, không mâu thuẫn): ${known.map(p=>`${p.speaker} = ${p.fullName}, tự ${p.courtesyName}; ${p.identity}; ${p.realm}${p.level?` cấp ${p.level}`:''}; tính cách: ${p.personality}; ${Object.entries(CHARACTER_STAT_LABELS).map(([key,label])=>`${label} ${npcEffectiveStats(p)[key]}`).join(', ')}; trang bị: ${npcItemNames(p.equipment)}; kỹ năng: ${npcItemNames(p.skills)}`).join(' | ')}`;
+  return `HỒ SƠ NPC ĐÃ XÁC LẬP (giữ đúng, không mâu thuẫn): ${known.map(p=>`${p.speaker} = ${p.fullName}, tự ${p.courtesyName}; ${p.identity}; ${p.realm}${p.level?` cấp ${p.level}`:''}; tính cách: ${p.personality}; ${Object.entries(CHARACTER_STAT_LABELS).map(([key,label])=>`${label} ${npcEffectiveStats(p)[key]}`).join(', ')}; ${p.beast&&!p.transformed?`chiêu thức bản năng: ${p.naturalAttacks.join(', ')}`:`trang bị: ${npcItemNames(p.equipment)}; kỹ năng: ${npcItemNames(p.skills)}`}`).join(' | ')}`;
 }
 
 (() => {
@@ -78,6 +105,7 @@ function npcProfilesContext(limit=10){
       `</dl></form>`+
       `<div class="npc-stats">${Object.entries(CHARACTER_STAT_LABELS).map(([key,label])=>`<div><span>${label}</span><b>${key==='health'&&profile.health!=null&&profile.health!==npcEffectiveStats(profile).health?`${profile.health.toLocaleString('vi-VN')} / `:''}${npcEffectiveStats(profile)[key].toLocaleString('vi-VN')}</b></div>`).join('')}</div>`+
       `<p class="npc-note">Chỉ số đã gồm trang bị và kỹ năng; đổi cấp độ sẽ quay lại toàn bộ.</p>`+
+      (profile.beast&&!profile.transformed?`<div class="npc-loadout"><h3>Chiêu thức bản năng</h3><small>${escapeHtml(profile.naturalAttacks.join(' · '))}</small></div>`:'')+
       ['Trang bị','Kỹ năng'].map((label,index)=>{const items=index?profile.skills:profile.equipment;return `<div class="npc-loadout"><h3>${label}</h3>${items?.length?items.map(item=>`<div class="item"><span class="item-icon">${escapeHtml(item[2])}</span><span class="item-details"><b>${escapeHtml(item[0])}</b><small>${escapeHtml(item[1])} · Cấp ${item[6]}</small><small>${escapeHtml(itemDescription(item))}</small></span></div>`).join(''):'<small class="npc-empty">Không có.</small>'}</div>`}).join('')+
       `<div class="npc-actions"><button type="button" class="create-item" id="npc-save">Lưu hồ sơ</button><span class="npc-notice" role="status">${escapeHtml(notice)}</span></div>`;
     const form=body.querySelector('#npc-profile-form');
@@ -105,6 +133,7 @@ function npcProfilesContext(limit=10){
   function saveProfile(profile){
     const updated=normalizeNpcProfile(readForm(profile),profile.speaker);
     // Stats are only re-rolled when the level actually changed.
+    if(profile.beast)Object.assign(updated,{beast:true,species:profile.species,transformed:profile.transformed,naturalAttacks:profile.naturalAttacks});
     if(updated.level===profile.level){updated.stats=profile.stats;updated.equipment=profile.equipment;updated.skills=profile.skills;if(profile.health!=null)updated.health=Math.min(profile.health,npcEffectiveStats(updated).health)}
     npcProfiles.set(profile.speaker,updated);
     renderProfile(updated,'Đã lưu hồ sơ; truyện sẽ dùng thông tin này từ lượt sau.');

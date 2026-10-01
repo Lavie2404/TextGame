@@ -1141,29 +1141,34 @@
       body: JSON.stringify({
         model,
         messages: [
-          { role: 'system', content: 'Ngươi phân loại hành động trong game truyện. Trả về JSON {"combat": true|false, "opponent": "tên"}. combat là true chỉ khi hành động người chơi vừa nhập khiến nhân vật chính thật sự giao đấu tay đôi với một nhân vật có tên trong truyện ngay lượt này (ra tay, nhận lời tỷ thí, bị tấn công và đánh trả). Lời khiêu khích, đe dọa, bàn bạc, hẹn đánh sau, đánh quái vô danh hay chạy trốn không phải combat. opponent là đúng tên nhân vật đó như truyện gọi; không giao đấu thì để chuỗi rỗng.' },
+          { role: 'system', content: 'Ngươi phân loại hành động trong game truyện. Trả về JSON {"combat": true|false, "opponent": "tên", "kind": "person"|"beast", "species": "loài", "transformed": true|false, "threat": "yếu"|"ngang"|"mạnh"}. combat là true chỉ khi hành động người chơi vừa nhập khiến nhân vật chính thật sự giao đấu với MỘT đối thủ cụ thể ngay lượt này (ra tay, nhận lời tỷ thí, bị tấn công và đánh trả): một nhân vật có tên, hoặc một con yêu thú/dã thú cụ thể trong cảnh. Lời khiêu khích, đe dọa, bàn bạc, hẹn đánh sau hay chạy trốn không phải combat. opponent: với người là đúng tên như truyện gọi; với thú là cách truyện gọi nó (ví dụ "con sói xám", "Hắc Lang Vương"). kind: "person" nếu là người, "beast" nếu là yêu thú hay dã thú. species: loài của thú (sói, hổ, rắn, khỉ, chim ưng, rồng…), rỗng với người. transformed: true chỉ khi yêu thú đã hóa hình thành dạng người. threat: sức mạnh của thú so với nhân vật chính theo những gì truyện tả: "yếu", "ngang" hoặc "mạnh"; với người để "ngang". Không giao đấu thì combat false và các trường còn lại rỗng.' },
           { role: 'user', content: `DIỄN BIẾN GẦN ĐÂY:\n${recentStory.slice(-2500)}\n\nHÀNH ĐỘNG NGƯỜI CHƠI:\n${action}` }
         ],
-        format: { type: 'object', properties: { combat: { type: 'boolean' }, opponent: { type: 'string' } }, required: ['combat', 'opponent'] },
+        format: { type: 'object', properties: { combat: { type: 'boolean' }, opponent: { type: 'string' }, kind: { type: 'string', enum: ['person', 'beast', ''] }, species: { type: 'string' }, transformed: { type: 'boolean' }, threat: { type: 'string', enum: ['yếu', 'ngang', 'mạnh', ''] } }, required: ['combat', 'opponent', 'kind', 'species', 'transformed', 'threat'] },
         think: false,
         stream: false,
         keep_alive: '10m',
-        options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0, num_predict: 40 }
+        options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0, num_predict: 80 }
       })
     }, 60000);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
     const parsed = JSON.parse(data.message?.content?.match(/\{[\s\S]*\}/)?.[0] || '{}');
     const opponent = String(parsed.opponent || '').replace(/\*\*/g, '').trim();
-    return parsed.combat === true && opponent && opponent !== getProfile().name ? opponent : '';
+    if (parsed.combat !== true || !opponent || opponent === getProfile().name) return null;
+    return { opponent, beast: parsed.kind === 'beast', species: String(parsed.species || '').trim() || 'thú', transformed: parsed.transformed === true, threat: parsed.threat || 'ngang' };
   }
 
   // Resolve a duel by the numbers and hand back the script for the model plus the outcome to apply.
-  async function prepareCombat(opponent, profile) {
+  async function prepareCombat(foe, profile) {
+    const { opponent } = foe;
     if (!npcProfiles.has(opponent)) {
       help.textContent = `Đang lập hồ sơ và chỉ số cho ${opponent} trước trận đánh…`;
-      if (!pendingNpcProfiles.has(opponent)) pendingNpcProfiles.set(opponent, window.generateNpcProfile(opponent).finally(() => pendingNpcProfiles.delete(opponent)));
-      npcProfiles.set(opponent, normalizeNpcProfile(await pendingNpcProfiles.get(opponent), opponent));
+      if (foe.beast) npcProfiles.set(opponent, makeBeastProfile(opponent, foe.species, foe.transformed, foe.threat));
+      else {
+        if (!pendingNpcProfiles.has(opponent)) pendingNpcProfiles.set(opponent, window.generateNpcProfile(opponent).finally(() => pendingNpcProfiles.delete(opponent)));
+        npcProfiles.set(opponent, normalizeNpcProfile(await pendingNpcProfiles.get(opponent), opponent));
+      }
     }
     const npc = npcProfiles.get(opponent);
     const npcStats = npcEffectiveStats(npc);
@@ -1178,9 +1183,11 @@
     const arms = (name, gear, techniques) => `${name}: vũ khí/trang bị ${npcItemNames(gear)}; chiêu thức ${npcItemNames(techniques)}`;
     const loadout = [
       arms(profile.name, active(equipment).filter(item => item[4] !== 'mount'), active(skills).filter(item => ['attack', 'defense', 'speed', 'burstAttack', 'burstDefense', 'burstSpeed'].includes(item[4]))),
-      arms(opponent, npc.equipment || [], npc.skills || [])
+      npc.beast && !npc.transformed
+        ? `${opponent}: yêu thú loài ${npc.species} chưa hóa hình, không dùng vũ khí hay công pháp; chỉ đánh bằng bản năng loài: ${npc.naturalAttacks.join(', ')}`
+        : arms(opponent, npc.equipment || [], npc.skills || [])
     ].join('\n');
-    return { npc, result, script: `${combatScript(result)}\nVŨ KHÍ VÀ CHIÊU THỨC HAI BÊN (mỗi đòn phải gọi tên chiêu thức hoặc vũ khí của người ra đòn; bên nào không có thì dùng quyền cước, binh khí thường):\n${loadout}` };
+    return { npc, result, script: `${combatScript(result)}\nVŨ KHÍ VÀ CHIÊU THỨC HAI BÊN (mỗi đòn phải gọi tên chiêu thức, vũ khí hoặc đòn bản năng của bên ra đòn; người không có kỹ năng thì dùng quyền cước, binh khí thường; thú chưa hóa hình chỉ dùng đòn bản năng của loài):\n${loadout}` };
   }
 
   function applyCombatOutcome(combat) {
@@ -1258,8 +1265,8 @@
 
     try {
       help.textContent = 'Đang xét xem lượt này có giao chiến không…';
-      const opponent = await detectCombatIntent(model, action, recentStory).catch(() => '');
-      if (opponent) combat = await prepareCombat(opponent, profile);
+      const foe = await detectCombatIntent(model, action, recentStory).catch(() => null);
+      if (foe) combat = await prepareCombat(foe, profile);
       help.textContent = combat
         ? `Trận đấu với ${combat.npc.speaker} đã được tính xong (${combat.result.strikes.length} đòn); model đang viết lại diễn biến…`
         : 'Model đang viết phần truyện dài khoảng 1.500–2.000 từ; có thể mất vài phút, nhất là lần gọi đầu.';
