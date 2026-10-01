@@ -344,20 +344,32 @@
     return `THẾ GIỚI NGƯỜI CHƠI MUỐN TRẢI NGHIỆM: ${profile.setting || 'chưa mô tả'}. Đây có thể là một bộ truyện/tiểu thuyết nổi tiếng, một giai đoạn lịch sử hoặc một thế giới hoàn toàn mới. Nếu nhận ra tác phẩm, hãy dùng đúng hệ thống sức mạnh, phe phái, địa lý, nhân vật và mốc truyện phù hợp với mô tả; nếu là lịch sử, tôn trọng thời đại, địa danh, thiết chế và sự kiện đã biết, không đưa yếu tố hiện đại sai thời kỳ. Phần nhập của người chơi quyết định thời điểm, địa điểm và các thay đổi so với nguyên tác. Nếu không nhận biết chắc hoặc thiếu dữ kiện, đừng bịa chi tiết canon/lịch sử như sự thật; hãy tạo tuyến nhân vật và sự kiện phụ hợp lý trong khung đã nêu. Nếu là thế giới tự tạo, coi các quy tắc người chơi mô tả là luật nền, suy ra nhất quán phe phái, tài nguyên, sức mạnh, hiểm họa và cơ hội. Trong mọi kiểu thế giới, mỗi lượt cần có diễn biến mới phù hợp hành động và bối cảnh; không trộn cơ chế từ tác phẩm/thời đại khác, không viết lại nguyên tác, và không tước quyền lựa chọn của nhân vật người chơi.`;
   }
 
-  function getPlayerAction() {
-    const cards = [...inputs.querySelectorAll('.input-card')];
-    const lines = [];
-    cards.forEach(card => {
+  // The player's input cards, in the order they were written: narration or a line of dialogue.
+  function getPlayerEntries() {
+    return [...inputs.querySelectorAll('.input-card')].flatMap(card => {
       const text = card.querySelector('textarea')?.value.trim();
-      if (!text) return;
-      if (card.classList.contains('dialogue-card')) {
-        const speaker = card.querySelector('.dialogue-meta input')?.value.trim() || getProfile().name;
-        lines.push(`${speaker} nói: “${text}”`);
-      } else {
-        lines.push(text);
-      }
+      if (!text) return [];
+      if (!card.classList.contains('dialogue-card')) return [{ type: 'narration', text }];
+      return [{ type: 'dialogue', speaker: card.querySelector('.dialogue-meta input')?.value.trim() || getProfile().name, text }];
     });
-    return lines.join('\n');
+  }
+
+  function getPlayerAction() {
+    return getPlayerEntries()
+      .map(entry => entry.type === 'dialogue' ? `${entry.speaker} nói: “${entry.text}”` : entry.text)
+      .join('\n');
+  }
+
+  // What the player wrote goes into the story verbatim before the model answers, so a turn can
+  // never lose it. The model is told it is already there and only continues from it. Returns the
+  // nodes added, so a failed call can take them back out.
+  function appendPlayerEntries(entries, playerName) {
+    const before = story.childElementCount;
+    entries.forEach(entry => {
+      if (entry.type === 'dialogue') appendNarrationWithDialogue(`<dialogue speaker="${entry.speaker.replace(/"/g, '')}">${entry.text}</dialogue>`, playerName);
+      else addParagraph(emphasizeQuotes(entry.text));
+    });
+    return [...story.children].slice(before);
   }
 
   function getWorldContext(profile) {
@@ -905,7 +917,7 @@
       'BỘ NHỚ CÁC CHƯƠNG TRƯỚC là dữ kiện liên tục đã được kể. Không tái diễn lại cảnh, hành động, lời thoại hoặc tiết lộ trong đó; chỉ nhắc ngắn nếu cần để nối mạch. Ưu tiên diễn biến mới và giải quyết các việc còn dang dở khi hành động hiện tại dẫn tới.',
       'Trong chương hiện tại, không sao chép lại bất kỳ câu, đoạn văn hay cảnh nào đã xuất hiện trong phần truyện gần đây, kể cả khi thay đổi vài từ. Chỉ nhắc lại dữ kiện cũ khi cần cho mạch truyện; không dựng lại cùng một khung cảnh hoặc hồi tưởng đã kể.',
       'MẠCH TRUYỆN VÀ HỒI ĐÁP TRỰC TIẾP (ƯU TIÊN CAO NHẤT): Đọc HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI và DIỄN BIẾN GẦN ĐÂY trước khi viết. Tiếp tục đúng cảnh, địa điểm, thời điểm, người đang có mặt và việc đang dang dở ở cuối phần gần đây. Nếu người chơi hỏi hoặc nói với một nhân vật, nhân vật đó phải nghe và trả lời đúng trọng tâm ngay trong lượt này; không né câu hỏi, không để người khác trả lời thay nếu không có lý do trong cảnh. Sau câu trả lời, mới kể nét mặt, hành động và hệ quả có quan hệ nhân quả rõ với câu hỏi/hành động ấy. Mỗi đoạn phải nối với đoạn ngay trước bằng hành động, lời đáp, phản ứng hoặc hệ quả; không tự chuyển cảnh, đổi chủ đề, thêm người lạ hay biến cố bất chợt không liên quan. Không bắt buộc tạo bước ngoặt ở mọi lượt; chỉ thêm sự kiện mới khi nó phát sinh hợp lý từ hành động hiện tại hoặc người chơi bật tùy chọn tình tiết bất ngờ. Không tự bịa rằng NPC đã biết điều chưa được tiết lộ.',
-      'Mỗi lượt hồi đáp hướng tới khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn tự nhiên; chất lượng và mạch truyện quan trọng hơn độ dài. Chuyển hành động người chơi thành văn xuôi theo đúng thứ tự, không bỏ qua bước nào, không chép nguyên văn phần tường thuật; giữ đúng nội dung lời thoại. Mỗi đoạn phải đóng góp diễn biến, phản ứng, thông tin hoặc hệ quả mới gắn với cảnh đang diễn ra. Không lặp lại cùng hành động/hình ảnh/lời thoại; không kéo dài bằng câu rỗng. Bắt đầu ngay tại thời điểm câu chuyện đang dở. Chỉ cho nhân vật chính thực hiện những gì người chơi đã nêu; không tự thêm quyết định, lời thoại hay suy nghĩ mới cho họ.',
+      'Mỗi lượt hồi đáp hướng tới khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn tự nhiên; chất lượng và mạch truyện quan trọng hơn độ dài. Hành động và lời thoại người chơi đã được ghi nguyên văn vào truyện trước lượt này: không kể lại, không chép lại, không sửa lời; viết tiếp phản ứng và hệ quả của từng bước theo đúng thứ tự, không bỏ qua bước nào. Mỗi đoạn phải đóng góp diễn biến, phản ứng, thông tin hoặc hệ quả mới gắn với cảnh đang diễn ra. Không lặp lại cùng hành động/hình ảnh/lời thoại; không kéo dài bằng câu rỗng. Bắt đầu ngay tại thời điểm câu chuyện đang dở. Chỉ cho nhân vật chính thực hiện những gì người chơi đã nêu; không tự thêm quyết định, lời thoại hay suy nghĩ mới cho họ.',
       'ĐỊNH DẠNG ĐẦU RA CÓ CẤU TRÚC (BẮT BUỘC, KHÔNG ĐƯỢC BỎ QUA): Bất cứ câu nào một nhân vật nói thành tiếng đều phải nằm trong thẻ <dialogue speaker="Tên nhân vật">Lời nói</dialogue>. Quy tắc này áp dụng cho cả nhân vật chính và mọi NPC. Không viết lời thoại trần trong dấu ngoặc kép, không gắn lời thoại vào giữa đoạn tường thuật. Mẫu đúng: Nàng khựng bước. <dialogue speaker="Diệp Thần">Cô vừa nói gì?</dialogue> Người thiếu nữ siết cuốn sách trong tay. <dialogue speaker="Tống Thúy">Ta nói viên đá này có thể soi thấy quá khứ.</dialogue> Mẫu sai: Nàng hỏi: “Cô vừa nói gì?” Mỗi lượt nói có một thẻ riêng, speaker là tên chính xác người đang nói. Chỉ lời kể, hành động, suy nghĩ và miêu tả để ngoài thẻ. Âm thanh, tiếng động, từ mô phỏng tiếng động như “phịch”, “vù”, “rầm”, “keng” là tường thuật, tuyệt đối không cho vào thẻ thoại. Tên gọi, danh xưng, tên cảnh giới hay thuật ngữ được nhắc giữa câu kể (ví dụ: còn gọi là Đấu Tông sơ kỳ) cũng là tường thuật, không cho vào thẻ thoại. Muốn làm nổi bật tên gọi, thuật ngữ hay tiếng động thì viết trong cặp **...** (ví dụ: còn gọi là **Đấu Tông sơ kỳ**), tuyệt đối không dùng dấu ngoặc kép hay ngoặc đơn. Tuyệt đối không dùng chữ Hán hoặc từ viết bằng chữ Hán; chỉ viết tiếng Việt bằng chữ Quốc ngữ. Trước khi trả lời, tự rà lại và bọc mọi câu thoại còn sót; chỉ xuất truyện, không xuất lời giải thích.',
       adultIntimacyRule(profile),
       worldDirective(profile),
@@ -1057,15 +1069,17 @@
     }
 
     const profile = getProfile();
+    const playerNodes = appendPlayerEntries(getPlayerEntries(), profile.name);
+    story.scrollTop = story.scrollHeight;
     const recentStory = formatRecentStoryContext();
     const surprise = document.querySelector('#surprise-event').checked;
     const userMessage = [
       `${getWorldContext(profile)}\n\nDIỄN BIẾN GẦN ĐÂY (ưu tiên mạch mới nhất):\n${recentStory}`,
       `BỘ NHỚ TỐI ĐA ${MAX_REMEMBERED_CHAPTERS} CHƯƠNG HOÀN TẤT GẦN NHẤT:\n${formatChapterMemory()}`,
       `CÁC LƯỢT ĐÃ KỂ TRONG CHƯƠNG ${chapterState.chapterNumber} (không kể lại):\n${formatCurrentChapterContext()}`,
-      `HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI:\n${action}`,
+      `HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI (đã được ghi nguyên văn vào truyện ngay trước lượt này; không kể lại, không chép lại, không sửa lời; chỉ viết tiếp những gì xảy ra sau đó):\n${action}`,
       surprise ? 'Hãy thêm một tình tiết bất ngờ hợp lý, có dấu hiệu gieo trước và không giải quyết mọi việc quá dễ dàng.' : '',
-      'YÊU CẦU LƯỢT NÀY: Tiếp tục liền mạch từ câu cuối cùng trong diễn biến gần đây. Thực hiện đúng hành động người chơi vừa nhập. Nếu đó là câu hỏi, hãy để đúng người được hỏi trả lời chính xác câu hỏi trước khi mở rộng cảnh. Không đưa thêm sự kiện ngoài mạch. Kết thúc bằng dòng [CHIẾN LỢI PHẨM] theo đúng mẫu.'
+      'YÊU CẦU LƯỢT NÀY: Hành động và lời thoại người chơi là điều vừa xảy ra ngay sau câu cuối cùng trong diễn biến gần đây; coi chúng là đã diễn ra và tiếp tục liền mạch bằng phản ứng, lời đáp và hệ quả. Nếu đó là câu hỏi, hãy để đúng người được hỏi trả lời chính xác câu hỏi trước khi mở rộng cảnh. Không đưa thêm sự kiện ngoài mạch. Kết thúc bằng dòng [CHIẾN LỢI PHẨM] theo đúng mẫu.'
     ].filter(Boolean).join('\n\n');
 
     turnButton.disabled = true;
@@ -1118,6 +1132,8 @@
       }
       story.scrollTop = story.scrollHeight;
     } catch (error) {
+      // The turn did not happen: take the player's lines back out so a retry does not double them.
+      playerNodes.forEach(node => node.remove());
       setStatus('error');
       setHelpForError(error);
       if (error?.message && error.name !== 'TypeError') help.textContent = error.message;
