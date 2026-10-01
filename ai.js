@@ -694,6 +694,40 @@
       const matching = gender ? people.filter(mention => genderOf(mention.name) === gender) : [];
       return (matching.at(-1) || people.filter(mention => genderOf(mention.name) !== opposite).at(-1))?.name || '';
     }
+    // Untagged speech by the paragraph: a line introduced by "Cảnh Phong chậm rãi cất tiếng:" or a
+    // paragraph the model set in **bold** that speaks in the first person (ta, lão phu, cháu…) becomes a
+    // dialogue tag; stray ** left over from such paragraphs is cleaned up.
+    const firstPerson = /(?:^|[^\p{L}])(?:ta|tại hạ|lão phu|lão nạp|bần đạo|bổn \p{L}+|chúng ta|bọn ta|thuộc hạ|tiểu nhân|cháu|thiếp|đệ|muội|tỷ|huynh)(?=$|[^\p{L}])/iu;
+    const leadIn = new RegExp(`(${anyPronoun}|${name})[^.!?\\n]{0,40}?\\s${attribution}[^.!?\\n]{0,20}[:：]\\s*$`, 'u');
+    const bareLeadIn = new RegExp(`^(?:${anyPronoun}|${name})[^.!?\\n]{0,40}?\\s${attribution}[^.!?\\n]{0,20}[:：]\\s*$`, 'u');
+    const unbold = value => {
+      value = value.replace(/^\*\*\s*/, '').replace(/\s*\*\*$/, '');
+      return (value.match(/\*\*/g) || []).length % 2 ? value.replace(/\*\*(?![\s\S]*\*\*)/, '') : value;
+    };
+    const paragraphs = text.split(/\n\s*\n/);
+    let consumed = 0;
+    text = paragraphs.map((paragraph, index) => {
+      const start = consumed;
+      consumed += paragraph.length + 2;
+      const trimmed = paragraph.trim();
+      if (!trimmed || /<dialogue\b/i.test(trimmed) || /^[“"「‘]/.test(trimmed)) return paragraph;
+      const previous = paragraphs[index - 1]?.trim() || '';
+      const introduced = leadIn.test(previous) && !/<dialogue\b/i.test(previous);
+      const marks = (trimmed.match(/\*\*/g) || []).length;
+      // Bold as a whole (**…**) or with one unpaired ** at either end: emphasis gone wrong, not a bold name.
+      const bold = /^\*\*(?:(?!\*\*)[\s\S])+\*\*$/.test(trimmed) || (marks % 2 === 1 && /^\*\*|\*\*$/.test(trimmed));
+      const content = unbold(trimmed);
+      if (!introduced && !(bold && firstPerson.test(content))) return marks % 2 ? content : paragraph;
+      const before = text.slice(Math.max(0, start - 1200), start);
+      const speaker = introduced
+        ? requireSpeaker(resolveSubject(previous.match(leadIn)[1], before), previous.match(leadIn)[1])
+        : impliedSpeaker(before, start);
+      return `<dialogue speaker="${speaker}">${content}</dialogue>`;
+    }).map((paragraph, index, all) => {
+      // The bubble names the speaker, so a paragraph that is only the lead-in clause goes away.
+      const next = all[index + 1]?.trim() || '';
+      return /^<dialogue\b/i.test(next) && bareLeadIn.test(paragraph.trim()) ? '' : paragraph;
+    }).filter(paragraph => paragraph !== '').join('\n\n');
     let output = '';
     let cursor = 0;
     let match;
