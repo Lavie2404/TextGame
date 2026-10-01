@@ -786,6 +786,10 @@
 
   const namedDialogueRule = 'NPC chỉ được nói khi có tên riêng rõ ràng. Giới thiệu tên NPC trong lời kể trước câu thoại đầu tiên, dùng nhất quán tên đó trong speaker. Không dùng NPC, Chưa rõ người nói, Người lạ, Cô gái, Nàng hoặc chức danh chung làm tên. Với nhân vật hư cấu mới, đặt tên phù hợp thời kỳ và thế giới; với nhân vật đã có tên, giữ nguyên tên. Nếu NPC chưa có tên, tự sáng tạo ngay một tên cổ trang phù hợp như Lâm Vân Phong hoặc Tô Thanh Dao, giới thiệu tên và dùng nhất quán cho nhân vật đó. Không dừng truyện, không yêu cầu người chơi cung cấp tên. Không gán lời của NPC sang người chơi.';
 
+  function addressRule(profile) {
+    return `XƯNG HÔ TRONG LỜI THOẠI NHẤT QUÁN: Mỗi người nói chọn đúng một cặp xưng hô hợp với quan hệ, tuổi tác và địa vị so với người nghe, rồi giữ nguyên cặp đó trong cả câu thoại và các lượt sau: ta–ngươi (ngang hàng hoặc bề trên nói với bề dưới), tại hạ–các hạ (lịch sự giữa người lạ), huynh–đệ, tỷ–muội, lão phu–tiểu tử, cháu–ông/bác, con–cha/mẹ, thiếp–chàng, thuộc hạ–chủ công. Hai vế của cặp phải khớp vai: đã xưng "cháu", "con", "thuộc hạ" thì gọi người nghe là "ông", "bác", "cha", "chủ công", không gọi là "ngươi"; đã gọi người nghe là "ngươi" thì xưng "ta", "lão phu", "bổn tọa", không xưng "cháu" hay "con". Mẫu sai: "Cháu ở đây đợi ngươi suốt cả ngày." Mẫu đúng: "Ta ở đây đợi ngươi suốt cả ngày." hoặc "Cháu ở đây đợi bác suốt cả ngày." Khi gọi tên người khác trong thoại, viết đúng từng chữ tên đã xác lập; tên nhân vật người chơi là ${profile.name}, không viết thành dạng khác. Trước khi trả lời, rà lại từng câu thoại xem xưng hô có đổi vai giữa chừng không.`;
+  }
+
   const coherentProseRule = 'VIẾT CÓ NGHĨA VÀ ĐÚNG BỐI CẢNH: Mỗi câu phải rõ chủ thể, hành động và đối tượng; lời thoại phải có mục đích phù hợp tình huống. Địa danh, phe phái, chức danh phải nhất quán với thế giới và thời kỳ đã chọn. Không ghép tên tùy tiện thành địa danh hoặc tổ chức như "biên giới Mạnh", "Mạnh Tông" khi chưa được xác lập. Với nhân vật lịch sử, không tự đổi phe phái hoặc vai trò nếu người chơi chưa thiết lập lịch sử thay thế. Nếu chưa đủ dữ kiện, dùng mô tả địa điểm rõ ràng như "bìa rừng phía bắc doanh trại", không bịa tên như một sự thật đã biết. Địa danh hư cấu mới phải được giới thiệu quan hệ với nơi hiện tại và vai trò trong tình huống. Trước khi trả lời, rà lại tên riêng, ý nghĩa câu và sự liên kết giữa lời kể với lời thoại. Trong lời kể, mọi tên nhân vật đều viết trong cặp **...** mỗi lần xuất hiện (ví dụ: **Lâm Tuyết** khẽ gật đầu); có thể dùng thêm **thân phận**, **cảnh giới** để nhấn mạnh chọn lọc; không bọc cả đoạn hoặc dùng các kiểu Markdown khác. Người nói trong thẻ thoại phải là chính nhân vật vừa được kể là đang nói, không lấy địa danh hay tên người khác vừa nhắc tới làm speaker.';
 
   const hanVietRule = 'TÊN RIÊNG PHẢI LÀ ÂM HÁN VIỆT: Mọi tên người, địa danh, tông môn, chức danh, công pháp và thuật ngữ gốc Trung Hoa đều viết bằng âm Hán Việt có dấu tiếng Việt, không viết bính âm (pinyin) và không kèm chữ Hán. Đúng: Tào Tháo, Lưu Bị, Gia Cát Lượng, Hứa Xương. Sai: Cao Cao, Liu Bei, Zhuge Liang, Xuchang, hoặc tên mang dấu thanh bính âm như Wáng Hào, Zhāng Wěi. Các tên này chỉ minh họa cách viết, không tự đưa vào truyện. Điều này áp dụng cho cả thuộc tính speaker trong thẻ thoại và mọi tên trong lời kể. Nếu bối cảnh là tác phẩm hay lịch sử Trung Hoa, dùng đúng tên Hán Việt quen thuộc với độc giả Việt Nam; nhân vật hư cấu mới cũng đặt tên Hán Việt. Trước khi trả lời, rà lại mọi tên riêng và sửa hết dạng bính âm.';
@@ -901,6 +905,7 @@
       worldDirective(profile),
       narrationPerspectiveRule(profile),
       namedDialogueRule,
+      addressRule(profile),
       hanVietRule,
       coherentProseRule,
       lootRule(),
@@ -935,6 +940,7 @@
                 worldDirective(profile),
                 narrationPerspectiveRule(profile),
                 namedDialogueRule,
+                addressRule(profile),
                 hanVietRule,
                 coherentProseRule,
                 'ĐỊNH DẠNG BẮT BUỘC: Mọi câu được nhân vật nói ra phải là <dialogue speaker="Tên nhân vật">Lời nói</dialogue>, kể cả thoại của nhân vật chính. Không viết câu thoại trong ngoặc kép ngoài thẻ và không gắn thoại vào đoạn kể. Ví dụ đúng: Mưa quất lên mái ngói. <dialogue speaker="Lâm Tuyết">Huynh nghe thấy tiếng động không?</dialogue> Ví dụ sai: Mưa quất lên mái ngói. “Huynh nghe thấy tiếng động không?” nàng hỏi. Âm thanh như “phịch”, “vù”, “rầm”, “keng” là lời kể, không phải lời thoại; tên gọi, danh xưng hay thuật ngữ nhắc giữa câu kể cũng vậy. Muốn làm nổi bật chúng thì viết trong cặp **...** (ví dụ: **Đấu Tông sơ kỳ**), không dùng dấu ngoặc kép hay ngoặc đơn. Chỉ viết tiếng Việt bằng chữ Quốc ngữ; tuyệt đối không có chữ Hán hay từ viết bằng chữ Hán. Hãy tự rà soát toàn bộ đầu ra trước khi kết thúc.',
