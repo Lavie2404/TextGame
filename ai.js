@@ -360,16 +360,24 @@
       .join('\n');
   }
 
-  // What the player wrote goes into the story verbatim before the model answers, so a turn can
-  // never lose it. The model is told it is already there and only continues from it. Returns the
-  // nodes added, so a failed call can take them back out.
-  function appendPlayerEntries(entries, playerName) {
-    const before = story.childElementCount;
-    entries.forEach(entry => {
-      if (entry.type === 'dialogue') appendNarrationWithDialogue(`<dialogue speaker="${entry.speaker.replace(/"/g, '')}">${entry.text}</dialogue>`, playerName);
-      else addParagraph(emphasizeQuotes(entry.text));
+  // The model retells what the player wrote, polished but complete. This checks that nothing was
+  // dropped: a dialogue line must reappear with most of its words in some speech bubble, and a
+  // narration card must leave most of its content words somewhere in the answer.
+  const contentWords = text => new Set(text.toLocaleLowerCase('vi').replace(/<[^>]*>|\*\*/g, ' ').match(/[\p{L}\p{N}]+/gu)?.filter(word => word.length > 1) || []);
+  function missingPlayerEntries(answer, entries) {
+    const bubbles = [...answer.matchAll(/<dialogue\b[^>]*>([\s\S]*?)<\/dialogue\s*>/gi)].map(match => contentWords(match[1]));
+    const whole = contentWords(answer);
+    const coverage = (words, pool) => words.size ? [...words].filter(word => pool.has(word)).length / words.size : 1;
+    return entries.filter(entry => {
+      const words = contentWords(entry.text);
+      return entry.type === 'dialogue'
+        ? !bubbles.some(bubble => coverage(words, bubble) >= 0.6)
+        : coverage(words, whole) < 0.5;
     });
-    return [...story.children].slice(before);
+  }
+  const describeEntry = entry => entry.type === 'dialogue' ? `lời thoại của ${entry.speaker}: “${entry.text}”` : `tường thuật: “${entry.text}”`;
+  function entryToStory(entry) {
+    return entry.type === 'dialogue' ? `<dialogue speaker="${entry.speaker.replace(/"/g, '')}">${entry.text}</dialogue>` : entry.text;
   }
 
   function getWorldContext(profile) {
@@ -917,7 +925,7 @@
       'BỘ NHỚ CÁC CHƯƠNG TRƯỚC là dữ kiện liên tục đã được kể. Không tái diễn lại cảnh, hành động, lời thoại hoặc tiết lộ trong đó; chỉ nhắc ngắn nếu cần để nối mạch. Ưu tiên diễn biến mới và giải quyết các việc còn dang dở khi hành động hiện tại dẫn tới.',
       'Trong chương hiện tại, không sao chép lại bất kỳ câu, đoạn văn hay cảnh nào đã xuất hiện trong phần truyện gần đây, kể cả khi thay đổi vài từ. Chỉ nhắc lại dữ kiện cũ khi cần cho mạch truyện; không dựng lại cùng một khung cảnh hoặc hồi tưởng đã kể.',
       'MẠCH TRUYỆN VÀ HỒI ĐÁP TRỰC TIẾP (ƯU TIÊN CAO NHẤT): Đọc HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI và DIỄN BIẾN GẦN ĐÂY trước khi viết. Tiếp tục đúng cảnh, địa điểm, thời điểm, người đang có mặt và việc đang dang dở ở cuối phần gần đây. Nếu người chơi hỏi hoặc nói với một nhân vật, nhân vật đó phải nghe và trả lời đúng trọng tâm ngay trong lượt này; không né câu hỏi, không để người khác trả lời thay nếu không có lý do trong cảnh. Sau câu trả lời, mới kể nét mặt, hành động và hệ quả có quan hệ nhân quả rõ với câu hỏi/hành động ấy. Mỗi đoạn phải nối với đoạn ngay trước bằng hành động, lời đáp, phản ứng hoặc hệ quả; không tự chuyển cảnh, đổi chủ đề, thêm người lạ hay biến cố bất chợt không liên quan. Không bắt buộc tạo bước ngoặt ở mọi lượt; chỉ thêm sự kiện mới khi nó phát sinh hợp lý từ hành động hiện tại hoặc người chơi bật tùy chọn tình tiết bất ngờ. Không tự bịa rằng NPC đã biết điều chưa được tiết lộ.',
-      'Mỗi lượt hồi đáp hướng tới khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn tự nhiên; chất lượng và mạch truyện quan trọng hơn độ dài. Hành động và lời thoại người chơi đã được ghi nguyên văn vào truyện trước lượt này: không kể lại, không chép lại, không sửa lời; viết tiếp phản ứng và hệ quả của từng bước theo đúng thứ tự, không bỏ qua bước nào. Mỗi đoạn phải đóng góp diễn biến, phản ứng, thông tin hoặc hệ quả mới gắn với cảnh đang diễn ra. Không lặp lại cùng hành động/hình ảnh/lời thoại; không kéo dài bằng câu rỗng. Bắt đầu ngay tại thời điểm câu chuyện đang dở. Chỉ cho nhân vật chính thực hiện những gì người chơi đã nêu; không tự thêm quyết định, lời thoại hay suy nghĩ mới cho họ.',
+      'Mỗi lượt hồi đáp hướng tới khoảng 1.500–2.000 từ tiếng Việt, thường chia thành 12–20 đoạn tự nhiên; chất lượng và mạch truyện quan trọng hơn độ dài. Kể lại toàn bộ hành động và lời thoại người chơi theo đúng thứ tự, không bỏ sót bước nào, câu nào: tường thuật được viết lại cho giàu hình ảnh, lời thoại được trau chuốt câu chữ nhưng giữ nguyên nội dung và ý; chỉ được thêm, không được cắt. Sau đó mới viết phản ứng và hệ quả. Mỗi đoạn phải đóng góp diễn biến, phản ứng, thông tin hoặc hệ quả mới gắn với cảnh đang diễn ra. Không lặp lại cùng hành động/hình ảnh/lời thoại; không kéo dài bằng câu rỗng. Bắt đầu ngay tại thời điểm câu chuyện đang dở. Chỉ cho nhân vật chính thực hiện những gì người chơi đã nêu; không tự thêm quyết định, lời thoại hay suy nghĩ mới cho họ.',
       'ĐỊNH DẠNG ĐẦU RA CÓ CẤU TRÚC (BẮT BUỘC, KHÔNG ĐƯỢC BỎ QUA): Bất cứ câu nào một nhân vật nói thành tiếng đều phải nằm trong thẻ <dialogue speaker="Tên nhân vật">Lời nói</dialogue>. Quy tắc này áp dụng cho cả nhân vật chính và mọi NPC. Không viết lời thoại trần trong dấu ngoặc kép, không gắn lời thoại vào giữa đoạn tường thuật. Mẫu đúng: Nàng khựng bước. <dialogue speaker="Diệp Thần">Cô vừa nói gì?</dialogue> Người thiếu nữ siết cuốn sách trong tay. <dialogue speaker="Tống Thúy">Ta nói viên đá này có thể soi thấy quá khứ.</dialogue> Mẫu sai: Nàng hỏi: “Cô vừa nói gì?” Mỗi lượt nói có một thẻ riêng, speaker là tên chính xác người đang nói. Chỉ lời kể, hành động, suy nghĩ và miêu tả để ngoài thẻ. Âm thanh, tiếng động, từ mô phỏng tiếng động như “phịch”, “vù”, “rầm”, “keng” là tường thuật, tuyệt đối không cho vào thẻ thoại. Tên gọi, danh xưng, tên cảnh giới hay thuật ngữ được nhắc giữa câu kể (ví dụ: còn gọi là Đấu Tông sơ kỳ) cũng là tường thuật, không cho vào thẻ thoại. Muốn làm nổi bật tên gọi, thuật ngữ hay tiếng động thì viết trong cặp **...** (ví dụ: còn gọi là **Đấu Tông sơ kỳ**), tuyệt đối không dùng dấu ngoặc kép hay ngoặc đơn. Tuyệt đối không dùng chữ Hán hoặc từ viết bằng chữ Hán; chỉ viết tiếng Việt bằng chữ Quốc ngữ. Trước khi trả lời, tự rà lại và bọc mọi câu thoại còn sót; chỉ xuất truyện, không xuất lời giải thích.',
       adultIntimacyRule(profile),
       worldDirective(profile),
@@ -1069,17 +1077,16 @@
     }
 
     const profile = getProfile();
-    const playerNodes = appendPlayerEntries(getPlayerEntries(), profile.name);
-    story.scrollTop = story.scrollHeight;
+    const entries = getPlayerEntries();
     const recentStory = formatRecentStoryContext();
     const surprise = document.querySelector('#surprise-event').checked;
     const userMessage = [
       `${getWorldContext(profile)}\n\nDIỄN BIẾN GẦN ĐÂY (ưu tiên mạch mới nhất):\n${recentStory}`,
       `BỘ NHỚ TỐI ĐA ${MAX_REMEMBERED_CHAPTERS} CHƯƠNG HOÀN TẤT GẦN NHẤT:\n${formatChapterMemory()}`,
       `CÁC LƯỢT ĐÃ KỂ TRONG CHƯƠNG ${chapterState.chapterNumber} (không kể lại):\n${formatCurrentChapterContext()}`,
-      `HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI (đã được ghi nguyên văn vào truyện ngay trước lượt này; không kể lại, không chép lại, không sửa lời; chỉ viết tiếp những gì xảy ra sau đó):\n${action}`,
+      `HÀNH ĐỘNG / LỜI THOẠI NGƯỜI CHƠI (bắt buộc kể lại đầy đủ, đúng thứ tự, ngay đầu lượt):\n${action}`,
       surprise ? 'Hãy thêm một tình tiết bất ngờ hợp lý, có dấu hiệu gieo trước và không giải quyết mọi việc quá dễ dàng.' : '',
-      'YÊU CẦU LƯỢT NÀY: Hành động và lời thoại người chơi là điều vừa xảy ra ngay sau câu cuối cùng trong diễn biến gần đây; coi chúng là đã diễn ra và tiếp tục liền mạch bằng phản ứng, lời đáp và hệ quả. Nếu đó là câu hỏi, hãy để đúng người được hỏi trả lời chính xác câu hỏi trước khi mở rộng cảnh. Không đưa thêm sự kiện ngoài mạch. Kết thúc bằng dòng [CHIẾN LỢI PHẨM] theo đúng mẫu.'
+      'YÊU CẦU LƯỢT NÀY: Tiếp tục liền mạch từ câu cuối cùng trong diễn biến gần đây. Mở đầu bằng việc kể lại toàn bộ hành động và lời thoại người chơi vừa nhập: tường thuật được viết lại cho giàu hình ảnh và hợp ngữ cảnh, lời thoại được trau chuốt câu chữ nhưng giữ nguyên ý, không bỏ sót câu nào, đặt trong thẻ <dialogue speaker="..."> đúng người nói. Chỉ sau đó mới viết phản ứng, lời đáp và hệ quả. Nếu đó là câu hỏi, hãy để đúng người được hỏi trả lời chính xác câu hỏi trước khi mở rộng cảnh. Không đưa thêm sự kiện ngoài mạch. Kết thúc bằng dòng [CHIẾN LỢI PHẨM] theo đúng mẫu.'
     ].filter(Boolean).join('\n\n');
 
     turnButton.disabled = true;
@@ -1090,7 +1097,7 @@
     setStatus('writing');
     help.textContent = 'Model đang viết phần truyện dài khoảng 1.500–2.000 từ; có thể mất vài phút, nhất là lần gọi đầu.';
 
-    try {
+    const requestTurn = async extraMessages => {
       const response = await fetchWithTimeout(`${OLLAMA_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1098,7 +1105,8 @@
           model,
           messages: [
             { role: 'system', content: buildSystemPrompt(profile) },
-            { role: 'user', content: userMessage }
+            { role: 'user', content: userMessage },
+            ...extraMessages
           ],
           think: false,
           stream: false,
@@ -1108,12 +1116,30 @@
       }, 600000);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
+      return data.message?.content?.trim() || '';
+    };
+
+    try {
+      let raw = await requestTurn([]);
+      // The model must retell everything the player wrote. If it dropped a line, ask once more
+      // naming what is missing; if it still drops it, put the player's own words in front.
+      let missing = missingPlayerEntries(raw, entries);
+      if (missing.length) {
+        help.textContent = 'Model bỏ sót phần người chơi nhập; đang yêu cầu viết lại…';
+        const retry = await requestTurn([
+          { role: 'assistant', content: raw },
+          { role: 'user', content: `Phần truyện trên đã BỎ SÓT ${missing.map(describeEntry).join('; ')}. Viết lại toàn bộ lượt này từ đầu, kể lại đầy đủ mọi hành động và lời thoại người chơi theo đúng thứ tự (có thể trau chuốt câu chữ, không được bỏ ý hay bỏ câu), rồi mới đến phản ứng và hệ quả. Giữ nguyên định dạng thẻ <dialogue> và dòng [CHIẾN LỢI PHẨM].` }
+        ]);
+        const stillMissing = missingPlayerEntries(retry, entries);
+        if (stillMissing.length <= missing.length) { raw = retry; missing = stillMissing; }
+        if (missing.length) raw = `${missing.map(entryToStory).join('\n\n')}\n\n${raw}`;
+      }
       removeDuplicateStoryEntries();
       const priorStory = [
         ...chapterState.turns.map(turn => turn.narrative),
         ...[...story.querySelectorAll('.narration, .story-entry dialogue')].map(node => node.textContent.trim())
       ];
-      const loot = extractLoot(data.message?.content?.trim() || '');
+      const loot = extractLoot(raw);
       const answer = removeRepeatedPassages(normalizeDialogue(await fixPinyinNames(loot.text, model, profile), profile.name), priorStory);
       if (!answer) throw new Error('Model không trả về phần truyện.');
 
@@ -1132,8 +1158,6 @@
       }
       story.scrollTop = story.scrollHeight;
     } catch (error) {
-      // The turn did not happen: take the player's lines back out so a retry does not double them.
-      playerNodes.forEach(node => node.remove());
       setStatus('error');
       setHelpForError(error);
       if (error?.message && error.name !== 'TypeError') help.textContent = error.message;
