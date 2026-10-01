@@ -37,11 +37,53 @@ function npcProfilesContext(limit=10){
   modal.addEventListener('click',event=>{if(event.target===modal)close()});
   document.addEventListener('keydown',event=>{if(event.key==='Escape'&&modal.classList.contains('open'))close()});
 
-  function renderProfile(profile){
+  const NO_COURTESY=/^(?:không có|không|chưa có|chưa rõ|-|—)?$/iu;
+  // Every field is editable in place; level is re-rolled into stats on save (same rules as the player).
+  function renderProfile(profile,notice=''){
     title.textContent=profile.fullName;
-    const row=(label,value)=>`<div><dt>${label}</dt><dd>${escapeHtml(String(value))}</dd></div>`;
-    body.innerHTML=`<dl class="npc-profile">${row('Họ và tên',profile.fullName)}${row('Tự',profile.courtesyName)}${row('Thân phận',profile.identity)}${row('Ngoại hình',profile.appearance)}${row('Tính cách',profile.personality)}${row('Cảnh giới',profile.realm)}${row('Cấp độ',profile.level||'—')}</dl>`+
-      `<div class="npc-stats">${Object.entries(CHARACTER_STAT_LABELS).map(([key,label])=>`<div><span>${label}</span><b>${profile.stats[key].toLocaleString('vi-VN')}</b></div>`).join('')}</div>`;
+    const field=(label,key,value,multiline=false,extra='',attrs='')=>`<div><dt><label for="npc-${key}">${label}</label></dt><dd>${multiline
+      ?`<textarea id="npc-${key}" data-key="${key}" rows="2">${escapeHtml(String(value))}</textarea>`
+      :`<input id="npc-${key}" data-key="${key}"${attrs} value="${escapeHtml(String(value)).replace(/"/g,'&quot;')}" />`}${extra}</dd></div>`;
+    const needsCourtesy=NO_COURTESY.test(String(profile.courtesyName).trim());
+    body.innerHTML=`<form id="npc-profile-form"><dl class="npc-profile">`+
+      field('Họ và tên','fullName',profile.fullName)+
+      field('Tự','courtesyName',needsCourtesy?'':profile.courtesyName,false,`<button type="button" class="create-item npc-inline" id="npc-courtesy-ai"${needsCourtesy?'':' hidden'}>AI đặt tên tự</button>`)+
+      field('Thân phận','identity',profile.identity,true)+
+      field('Ngoại hình','appearance',profile.appearance,true)+
+      field('Tính cách','personality',profile.personality,true)+
+      `<div><dt>Cảnh giới</dt><dd id="npc-realm">${escapeHtml(profile.realm)}</dd></div>`+
+      field('Cấp độ','level',profile.level,false,'',' type="number" min="0"')+
+      `</dl></form>`+
+      `<div class="npc-stats">${Object.entries(CHARACTER_STAT_LABELS).map(([key,label])=>`<div><span>${label}</span><b>${profile.stats[key].toLocaleString('vi-VN')}</b></div>`).join('')}</div>`+
+      `<div class="npc-actions"><button type="button" class="create-item" id="npc-save">Lưu hồ sơ</button><span class="npc-notice" role="status">${escapeHtml(notice)}</span></div>`;
+    const form=body.querySelector('#npc-profile-form');
+    const courtesyInput=form.querySelector('#npc-courtesyName'),courtesyButton=body.querySelector('#npc-courtesy-ai');
+    courtesyInput.addEventListener('input',()=>{courtesyButton.hidden=courtesyInput.value.trim()!==''});
+    form.querySelector('#npc-level').addEventListener('input',event=>{body.querySelector('#npc-realm').textContent=npcRealmLabel(Number(event.target.value)||0)});
+    form.addEventListener('submit',event=>{event.preventDefault();saveProfile(profile)});
+    body.querySelector('#npc-save').addEventListener('click',()=>saveProfile(profile));
+    courtesyButton.addEventListener('click',async()=>{
+      courtesyButton.disabled=true;courtesyButton.textContent='AI đang đặt…';
+      try{
+        const name=await window.generateNpcCourtesyName(readForm(profile));
+        courtesyInput.value=name;courtesyButton.hidden=true;
+        body.querySelector('.npc-notice').textContent=`Đã đặt tên tự "${name}"; bấm Lưu hồ sơ để giữ.`;
+      }catch(error){body.querySelector('.npc-notice').textContent=`Chưa đặt được tên tự: ${error.message||'Ollama không phản hồi.'}`}
+      finally{courtesyButton.disabled=false;courtesyButton.textContent='AI đặt tên tự'}
+    });
+  }
+  function readForm(profile){
+    const raw={...profile};
+    body.querySelectorAll('[data-key]').forEach(input=>{raw[input.dataset.key]=input.value});
+    if(!String(raw.courtesyName).trim())raw.courtesyName='Không có';
+    return raw;
+  }
+  function saveProfile(profile){
+    const updated=normalizeNpcProfile(readForm(profile),profile.speaker);
+    // Stats are only re-rolled when the level actually changed.
+    if(updated.level===profile.level)updated.stats=profile.stats;
+    npcProfiles.set(profile.speaker,updated);
+    renderProfile(updated,'Đã lưu hồ sơ; truyện sẽ dùng thông tin này từ lượt sau.');
   }
   function renderMessage(message,retry=false){
     body.innerHTML=`<p class="modal-intro" role="status">${escapeHtml(message)}</p>${retry?'<button type="button" class="create-item" id="npc-retry">Thử lại</button>':''}`;

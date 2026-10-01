@@ -1060,6 +1060,40 @@
     }
   };
 
+  // A courtesy name (tên tự) for an NPC whose profile has none, fitting the world and the person.
+  window.generateNpcCourtesyName = async npc => {
+    const model = modelInput.value.trim();
+    if (!model) throw new Error('Hãy nhập tên model Ollama trong Thiết lập.');
+    const profile = getProfile();
+    const response = await fetchWithTimeout(`${OLLAMA_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'Ngươi đặt tên tự (biểu tự) cho nhân vật trong game truyện cổ trang. Chỉ trả về JSON đúng lược đồ, viết tiếng Việt bằng âm Hán Việt có dấu, không chữ Hán, không giải thích.' },
+          { role: 'user', content: [
+            `THẾ GIỚI: ${profile.setting || profile.worldName}`,
+            `NHÂN VẬT: ${npc.fullName}; thân phận: ${npc.identity}; tính cách: ${npc.personality}.`,
+            'courtesyName: tên tự gồm 2 chữ Hán Việt, hợp thời đại, liên hệ ý nghĩa với tên thật hoặc tính cách theo lối đặt tên tự cổ (ví dụ Gia Cát Lượng tự Khổng Minh, Triệu Vân tự Tử Long). Không trùng tên thật, không trùng tên tự của nhân vật khác.',
+            npcProfilesContext()
+          ].join('\n\n') }
+        ],
+        format: { type: 'object', properties: { courtesyName: { type: 'string' } }, required: ['courtesyName'] },
+        think: false,
+        stream: false,
+        keep_alive: '10m',
+        options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0.7, top_p: 0.9, num_predict: 60 }
+      })
+    }, 120000);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
+    const content = data.message?.content || '';
+    const name = String((JSON.parse(content.match(/\{[\s\S]*\}/)?.[0] || '{}').courtesyName || '')).replace(/\s+/g, ' ').trim();
+    if (!name || /^(?:không có|không)$/iu.test(name)) throw new Error('Model không trả về tên tự.');
+    return name;
+  };
+
   async function playAI() {
     const action = getPlayerAction();
     if (!action) {
