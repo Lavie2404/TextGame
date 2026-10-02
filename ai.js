@@ -658,7 +658,7 @@
     // A quote with no speech verb beside it is still speech when it reads as a
     // sentence: ends like one, runs long, or addresses someone (ta, ngươi…).
     const addressing = /(?:^|[^\p{L}])(?:ta|ngươi|ngài|huynh|muội|các hạ|tại hạ|lão phu|chúng ta|bọn ta|các ngươi)(?=$|[^\p{L}])/iu;
-    const looksLikeUtterance = value => /^\p{Lu}/u.test(value) && (/[.!?…]$/u.test(value) || value.split(/\s+/).length >= 7 || addressing.test(value));
+    const looksLikeUtterance = value => /[.!?…]$/u.test(value) || value.split(/\s+/).length >= 7 || addressing.test(value);
     let lastSpeaker = '';
     let lastSpeakerEnd = -1;
     // Who an unattributed utterance belongs to: the subject of the sentence
@@ -676,7 +676,9 @@
       lastSpeaker = speaker;
       lastSpeakerEnd = end;
       if (speaker !== playerName) lastNpc = speaker;
-      output += `<dialogue speaker="${speaker}">${content.replace(/[\s,;]+$/u, '')}</dialogue>`;
+      // A line starts with a capital even when the model split it mid-sentence, and the tag never touches the text before it.
+      const line = content.replace(/[\s,;]+$/u, '').replace(/^(\**)(\p{Ll})/u, (whole, stars, letter) => stars + letter.toLocaleUpperCase('vi'));
+      output += `${output && !/\s$/.test(output) ? ' ' : ''}<dialogue speaker="${speaker}">${line}</dialogue>`;
     }
     // Resolve a third-person pronoun to the most recent named character before the utterance, never a place
     // ("kinh thành Gia Cát") and never the player, who is "ngươi" in second-person narration. A character
@@ -740,6 +742,7 @@
         cursor = dialoguePattern.lastIndex;
         if (!subject) {
           if (soundOnly.test(spokenText) || !looksLikeUtterance(spokenText)) { output += match[0]; continue; }
+          output = output.replace(/[,;:：]\s*$/u, '.');
           emitDialogue(impliedSpeaker(before, match.index), spokenText, cursor);
           continue;
         }
@@ -749,6 +752,7 @@
         const clause = `(?:${anyPronoun}|${name})${modifiers}\\s+${attribution}`;
         output = output.replace(new RegExp(`(^|[.!?…>]\\s+|\\n)${clause}\\s*[:：]\\s*$`, 'u'), '$1');
         const tail = after.match(new RegExp(`^\\s*[,—–-]?\\s*${clause}\\s*[.!…]+(?=\\s|$)`, 'u'));
+        output = output.replace(/[,;:：]\s*$/u, '.');
         emitDialogue(speaker, spokenText, cursor);
         // A clause that goes on after the quote (“...”, ngươi đáp, rồi quay lưng.) is
         // capitalised into its own sentence later by capitalizeAfterDialogue.
