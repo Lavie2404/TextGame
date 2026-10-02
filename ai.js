@@ -1108,6 +1108,40 @@
 
   window.generateOpeningText = generateOpeningText;
 
+  // The heading under the chapter number shows only WHEN the story takes place. The model reads the
+  // moment out of the free-text setting ("Năm 200, thời Tam quốc"); if it cannot, the first clause of
+  // the setting is used instead.
+  window.describeSettingTime = async setting => {
+    const fallback = String(setting || '').split(/[\n;.!?]/)[0].trim().slice(0, 48) || 'Thời đại chưa rõ';
+    const model = modelInput.value.trim();
+    if (!model || !setting) return fallback;
+    try {
+      const response = await fetchWithTimeout(`${OLLAMA_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: 'Ngươi rút ra mốc thời gian của bối cảnh truyện. Chỉ trả về JSON đúng lược đồ, tiếng Việt, không giải thích.' },
+            { role: 'user', content: `BỐI CẢNH: ${setting}\n\ntime: mốc thời gian câu chuyện diễn ra, 3–8 từ, gồm năm/niên hiệu nếu có và thời đại, ví dụ "Năm 200, thời Tam quốc", "Thời Thượng cổ, Huyền Thiên đại lục", "Mùa đông năm Kiến An thứ 13". Không ghi nhân vật, sự kiện, thân phận hay địa điểm nhỏ.` }
+          ],
+          format: { type: 'object', properties: { time: { type: 'string' } }, required: ['time'] },
+          think: false,
+          stream: false,
+          keep_alive: '10m',
+          options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0, num_predict: 40 }
+        })
+      }, 60000);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
+      const time = String(JSON.parse(data.message?.content?.match(/\{[\s\S]*\}/)?.[0] || '{}').time || '').replace(/\s+/g, ' ').replace(/[.。]+$/, '').trim();
+      return time && time.length <= 60 ? time : fallback;
+    } catch (error) {
+      console.warn('Không rút được mốc thời gian:', error);
+      return fallback;
+    }
+  };
+
   // Builds one NPC profile from what the story has already shown; npc-profiles.js validates and caches it.
   window.generateNpcProfile = async speaker => {
     const model = modelInput.value.trim();

@@ -154,9 +154,9 @@ document.querySelector('#origin-form').addEventListener('submit',async event=>{
   startButton.disabled=true;startButton.textContent='Đang viết mở đầu…';startStatus.textContent='Đang gửi hồ sơ và bối cảnh tới Ollama trên máy này.';startStatus.dataset.state='busy';
   try{
     if(typeof window.generateOpeningText!=='function')throw new Error('Không tải được mô-đun AI. Hãy tải lại trang.');
-    const opening=await window.generateOpeningText({name,age,identity,level,realm,setting,goal,allowNsfw,worldName});
+    const [opening,settingTime]=await Promise.all([window.generateOpeningText({name,age,identity,level,realm,setting,goal,allowNsfw,worldName}),window.describeSettingTime?.(setting)??worldName]);
     window.resetChapterMemory?.();resetNpcProfiles();resetDemonicState();resetLoot();equipment.length=0;skills.length=0;baseStats=rollCharacterStats(level);pendingBurst=null;burstFatigue=null;chapterMindPercent=0;renderProgress(level,0);currentHealth=null;Object.keys(potions).forEach(key=>delete potions[key]);renderItems();
-    renderRealmPanels(realm,level);document.querySelector('#player-name').textContent=name;document.querySelector('#player-realm').textContent=`${realm} · Cấp ${level}`;document.querySelector('#custom-name').value=name;document.querySelector('#custom-level').value=level;document.querySelector('#custom-realm').value=realm;document.querySelector('.chapter strong').textContent=`${worldName} · ${identity}`;window.setJourneyGoal?.(goal||'Bắt đầu hành trình');window.rerollShopStock?.();
+    renderRealmPanels(realm,level);document.querySelector('#player-name').textContent=name;document.querySelector('#player-realm').textContent=`${realm} · Cấp ${level}`;document.querySelector('#custom-name').value=name;document.querySelector('#custom-level').value=level;document.querySelector('#custom-realm').value=realm;document.querySelector('.chapter strong').textContent=settingTime;window.setJourneyGoal?.(goal||'Bắt đầu hành trình');window.rerollShopStock?.();
     story.replaceChildren();
     const chapterLabel=document.createElement('div');chapterLabel.className='chapter-label';
     const leftRule=document.createElement('span'),rightRule=document.createElement('span');chapterLabel.append(leftRule,document.createTextNode('Khai mở thiên mệnh'),rightRule);story.append(chapterLabel);
