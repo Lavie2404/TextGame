@@ -116,25 +116,26 @@
         body: JSON.stringify({
           model,
           messages: [
-            { role: 'system', content: 'Ngươi là thư ký ghi nhật ký hành trình cho game truyện. Chỉ trả về JSON đúng lược đồ, viết tiếng Việt, không văn chương. memory: MỘT câu tối đa 25 từ ghi sự việc quan trọng nhất vừa xảy ra trong lượt (ai, làm gì, kết quả), gọi nhân vật người chơi bằng "ngươi". step: MỘT câu tối đa 25 từ nêu việc cụ thể cần làm tiếp để tiến gần mục tiêu dài hạn, dựa trên tình huống cuối lượt. progress: số nguyên 0–100 ước lượng mức hoàn thành mục tiêu dài hạn tính đến hết lượt này; chỉ tăng khi có bước tiến thật, có thể giảm nếu thụt lùi; mục tiêu chưa bắt đầu là 0, đã hoàn tất là 100. Chỉ dùng dữ kiện trong tư liệu, không suy diễn.' },
+            { role: 'system', content: 'Ngươi là thư ký ghi nhật ký hành trình cho game truyện. Chỉ trả về JSON đúng lược đồ, viết tiếng Việt, không văn chương. affinity: với MỖI nhân vật có mặt trong lượt (trừ nhân vật người chơi), số delta từ -20 đến 20 cho biết thiện cảm của họ với người chơi thay đổi ra sao sau lượt này: được giúp đỡ, tặng quà, tôn trọng, cứu mạng thì dương (nhỏ 1–5, lớn 10–20); bị xúc phạm, lừa, cướp, đánh, hại người thân thì âm; không có gì đáng kể thì 0. name phải đúng tên như trong thẻ speaker. memory: MỘT câu tối đa 25 từ ghi sự việc quan trọng nhất vừa xảy ra trong lượt (ai, làm gì, kết quả), gọi nhân vật người chơi bằng "ngươi". step: MỘT câu tối đa 25 từ nêu việc cụ thể cần làm tiếp để tiến gần mục tiêu dài hạn, dựa trên tình huống cuối lượt. progress: số nguyên 0–100 ước lượng mức hoàn thành mục tiêu dài hạn tính đến hết lượt này; chỉ tăng khi có bước tiến thật, có thể giảm nếu thụt lùi; mục tiêu chưa bắt đầu là 0, đã hoàn tất là 100. Chỉ dùng dữ kiện trong tư liệu, không suy diễn.' },
             { role: 'user', content: [
               `MỤC TIÊU DÀI HẠN: ${journal.goal || 'chưa đặt mục tiêu cụ thể'}`,
               `BƯỚC TIẾP THEO ĐANG GHI: ${journal.step || 'chưa có'}`,
               `TIẾN ĐỘ ĐANG GHI: ${journal.progress}%`,
               `KÝ ỨC GẦN ĐÂY: ${journal.notes.map(note => note.text).join(' | ') || 'chưa có'}`,
               `HÀNH ĐỘNG NGƯỜI CHƠI LƯỢT NÀY:\n${action}`,
+              `HẢO CẢM HIỆN TẠI: ${[...new Set([...narrative.matchAll(/speaker\s*=\s*["']([^"']+)["']/g)].map(match => match[1]))].filter(name => name !== getProfile().name).map(name => `${name}: ${affinityOf(name)} (${affinityTier(affinityOf(name))})`).join('; ') || 'chưa có nhân vật nào'}`,
               `DIỄN BIẾN VỪA KỂ:\n${narrative.length > 6000 ? `${narrative.slice(0, 3000)}\n[...]\n${narrative.slice(-3000)}` : narrative}`
             ].join('\n\n') }
           ],
           format: {
             type: 'object',
-            properties: { memory: { type: 'string' }, step: { type: 'string' }, progress: { type: 'integer' } },
-            required: ['memory', 'step', 'progress']
+            properties: { memory: { type: 'string' }, step: { type: 'string' }, progress: { type: 'integer' }, affinity: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, delta: { type: 'integer' } }, required: ['name', 'delta'] } } },
+            required: ['memory', 'step', 'progress', 'affinity']
           },
           think: false,
           stream: false,
           keep_alive: '10m',
-          options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0.2, top_p: 0.8, num_predict: 220 }
+          options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0.2, top_p: 0.8, num_predict: 320 }
         })
       }, 120000);
       const data = await response.json();
@@ -148,6 +149,13 @@
     pushJournalNote(memory);
     if (typeof update?.step === 'string' && update.step.trim()) journal.step = update.step.replace(/\s+/g, ' ').trim();
     if (Number.isFinite(update?.progress)) journal.progress = Math.max(0, Math.min(100, Math.round(update.progress)));
+    // Affinity moves at most 20 a turn and only for characters who were actually in the scene.
+    const present = new Set([...narrative.matchAll(/speaker\s*=\s*["']([^"']+)["']/g)].map(match => match[1]));
+    const changes = (Array.isArray(update?.affinity) ? update.affinity : [])
+      .map(entry => ({ name: String(entry.name || '').replace(/\*\*/g, '').trim(), delta: Math.max(-20, Math.min(20, Math.round(Number(entry.delta) || 0))) }))
+      .filter(entry => entry.delta && entry.name && entry.name !== getProfile().name && (present.has(entry.name) || npcProfiles.has(entry.name) || narrative.includes(entry.name)));
+    changes.forEach(entry => adjustAffinity(entry.name, entry.delta));
+    if (changes.length) appendTurnReport(`Hảo cảm: ${changes.map(entry => `${entry.name} ${entry.delta > 0 ? '+' : ''}${entry.delta} → ${affinityOf(entry.name)} (${affinityTier(affinityOf(entry.name))})`).join('; ')}.`);
     saveChapterState();
     renderJourney();
   }
@@ -884,6 +892,8 @@
     return `XƯNG HÔ TRONG LỜI THOẠI NHẤT QUÁN: Mỗi người nói chọn đúng một cặp xưng hô hợp với quan hệ, tuổi tác và địa vị so với người nghe, rồi giữ nguyên cặp đó trong cả câu thoại và các lượt sau: ta–ngươi (ngang hàng hoặc bề trên nói với bề dưới), tại hạ–các hạ (lịch sự giữa người lạ), huynh–đệ, tỷ–muội, lão phu–tiểu tử, cháu–ông/bác, con–cha/mẹ, thiếp–chàng, thuộc hạ–chủ công. Hai vế của cặp phải khớp vai: đã xưng "cháu", "con", "thuộc hạ" thì gọi người nghe là "ông", "bác", "cha", "chủ công", không gọi là "ngươi"; đã gọi người nghe là "ngươi" thì xưng "ta", "lão phu", "bổn tọa", không xưng "cháu" hay "con". Mẫu sai: "Cháu ở đây đợi ngươi suốt cả ngày." Mẫu đúng: "Ta ở đây đợi ngươi suốt cả ngày." hoặc "Cháu ở đây đợi bác suốt cả ngày." Từ dùng để gọi người đối diện phải là cách gọi có thật trong tiếng Việt cổ trang, hợp tuổi và vai: gọi người trẻ hơn thì tiểu tử, tiểu huynh đệ, tiểu cô nương, công tử, cậu bé, nhóc con, cháu; gọi ngang hàng thì huynh đài, các hạ, đạo hữu, cô nương, huynh, đệ; gọi người trên thì tiền bối, lão nhân gia, đại nhân, tướng quân, sư phụ, trưởng lão. "Chàng" chỉ dành cho nữ gọi nam khi đã thân thiết hay có tình ý (đi với "thiếp"); nam gọi nam, người lạ gọi nhau hay nữ mới gặp nam đều không dùng "chàng", mà dùng công tử, huynh đài, các hạ, tiểu tử, ngươi tùy vai. Tương tự "nàng" trong lời thoại chỉ dành cho nam gọi nữ đã thân thiết; người lạ gọi cô nương, tiểu thư, phu nhân. Tuyệt đối không bịa ra cách gọi dịch máy móc như "chú trẻ", "người trẻ", "bạn trẻ", "anh bạn", "quý ông", "quý cô". Khi gọi tên người khác trong thoại, viết đúng từng chữ tên đã xác lập; tên nhân vật người chơi là ${profile.name}, không viết thành dạng khác. Trước khi trả lời, rà lại từng câu thoại xem xưng hô có đổi vai giữa chừng không.`;
   }
 
+  const affinityRule = 'HẢO CẢM QUYẾT ĐỊNH THÁI ĐỘ NPC: Mỗi NPC có điểm hảo cảm với người chơi từ -100 đến 100 ghi trong hồ sơ; thái độ, lời lẽ và hành động của họ phải đúng mức đó. Kẻ thù sinh tử (-100..-80): tìm cách hại, giết, không nghe lý lẽ. Thù địch (-79..-50): khinh ghét, cản trở, có thể ra tay. Ác cảm (-49..-20): lạnh nhạt, nghi ngờ, từ chối giúp. Trung lập (-19..19): xã giao, cẩn trọng, giúp khi có lợi. Thiện cảm (20..49): cởi mở, sẵn lòng giúp việc nhỏ. Thân thiết (50..79): tin cậy, chia sẻ bí mật, giúp việc lớn, có thể nảy sinh tình cảm. Tri kỷ (80..100): sống chết có nhau, hy sinh vì người chơi. Hảo cảm chỉ thay đổi từ từ qua hành động thật trong truyện, không nhảy vọt vì một câu nói; không bao giờ ghi con số hảo cảm vào truyện.';
+
   const combatRule = 'GIAO CHIẾN PHẢI KỂ RÕ TỪNG ĐƯỜNG: Khi có đánh nhau, không được tóm tắt kiểu "trận chiến bắt đầu" hay "hai người giao đấu một hồi". Kể theo từng hiệp, mỗi hiệp gồm đủ bốn ý: (1) ai ra tay, bằng chiêu gì (gọi tên chiêu thức hoặc tả rõ động tác, vũ khí, hướng đánh; nhân vật chính chỉ dùng kỹ năng và trang bị đang có, người thường chưa tu luyện thì chỉ có quyền cước, binh khí thường); (2) chiêu đó nhắm vào đâu và uy lực ra sao; (3) đối thủ ứng phó thế nào: né tránh, đỡ đòn, phản công hay chịu đòn, và vì sao; (4) kết quả thật: trúng hay hụt, bị thương ở đâu, nặng nhẹ, mất thế hay giữ thế. Khi lượt này có KỊCH BẢN GIAO CHIẾN do hệ thống tính sẵn thì số đòn, thứ tự ra đòn, mức thương tích và kết cục phải theo đúng kịch bản, không thêm bớt; không có kịch bản (đánh thú hoang, lính vô danh) thì ít nhất 3 hiệp và chênh lệch cấp độ, chỉ số phải thể hiện trong kết quả từng hiệp. Không bao giờ ghi con số chỉ số, máu hay phần trăm vào truyện. Kết thúc đoạn giao chiến phải nêu rõ trạng thái hai bên: còn đứng được không, thương tích, ai thắng thế, trận đánh đã kết thúc hay còn tiếp diễn. Nếu người chơi chỉ mới khơi mào hoặc nhận lời đánh, hãy kể hiệp đầu tiên ngay trong lượt này thay vì dừng ở lời hẹn.';
 
   const hiddenGoalRule = 'MỤC TIÊU LÀ ĐỘNG CƠ THẦM KÍN, KHÔNG BAO GIỜ NÓI RA: MỤC TIÊU và BƯỚC TIẾP THEO chỉ là định hướng cho người dẫn truyện để sắp xếp tình tiết; chúng tồn tại trong đầu nhân vật chính, không tồn tại trong thế giới truyện. Tuyệt đối không nhắc nguyên văn hay diễn đạt lại mục tiêu trong lời kể, trong lời thoại của nhân vật chính hay của bất kỳ NPC nào; không để nhân vật chính tuyên bố, tâm sự, nói bóng gió hay tự nhủ thành tiếng về mục tiêu; NPC không biết và không được đoán ra mục tiêu trừ khi chính hành động người chơi nhập vào đã nói ra. Hãy thể hiện mục tiêu bằng việc làm: nhân vật chính âm thầm chọn nơi đến, người làm quen, câu hỏi đặt ra, ân tình gây dựng, mỗi lượt tiến thêm một bước nhỏ và kín đáo. Mẫu sai: "Ta tới đây để dựng hậu cung mỹ nhân." Mẫu đúng: nhân vật chính hỏi thăm nàng về gia cảnh, giúp nàng một việc nhỏ, ghi nhớ nơi nàng ở. Những mục tiêu tai tiếng hay nguy hiểm nếu bị nói ra phải mang hậu quả thật: bị khinh ghét, tố cáo, truy bắt.';
@@ -1006,6 +1016,7 @@
       addressRule(profile),
       hiddenGoalRule,
       combatRule,
+      affinityRule,
       hanVietRule,
       coherentProseRule,
       lootRule(),
@@ -1043,6 +1054,7 @@
                 addressRule(profile),
                 hiddenGoalRule,
                 combatRule,
+                affinityRule,
                 hanVietRule,
                 coherentProseRule,
                 'ĐỊNH DẠNG BẮT BUỘC: Mọi câu được nhân vật nói ra phải là <dialogue speaker="Tên nhân vật">Lời nói</dialogue>, kể cả thoại của nhân vật chính. Không viết câu thoại trong ngoặc kép ngoài thẻ và không gắn thoại vào đoạn kể. Ví dụ đúng: Mưa quất lên mái ngói. <dialogue speaker="Lâm Tuyết">Huynh nghe thấy tiếng động không?</dialogue> Ví dụ sai: Mưa quất lên mái ngói. “Huynh nghe thấy tiếng động không?” nàng hỏi. Âm thanh như “phịch”, “vù”, “rầm”, “keng” là lời kể, không phải lời thoại; tên gọi, danh xưng hay thuật ngữ nhắc giữa câu kể cũng vậy. Muốn làm nổi bật chúng thì viết trong cặp **...** (ví dụ: **Đấu Tông sơ kỳ**), không dùng dấu ngoặc kép hay ngoặc đơn. Chỉ viết tiếng Việt bằng chữ Quốc ngữ; tuyệt đối không có chữ Hán hay từ viết bằng chữ Hán. Hãy tự rà soát toàn bộ đầu ra trước khi kết thúc.',

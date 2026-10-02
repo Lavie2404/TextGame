@@ -8,7 +8,16 @@ const NPC_PROFILE_SCHEMA = {
   required:['fullName','courtesyName','identity','appearance','personality','level']
 };
 const npcProfiles = new Map(), pendingNpcProfiles = new Map();
-function resetNpcProfiles(){npcProfiles.clear();pendingNpcProfiles.clear()}
+// How each named character feels about the player: -100 (kẻ thù sinh tử) … 0 (trung lập) … 100 (tri kỷ).
+// Kept by name so it accrues from the first line someone speaks, before any profile exists.
+const npcAffinity = new Map();
+const AFFINITY_TIERS=[[-80,'Kẻ thù sinh tử'],[-50,'Thù địch'],[-20,'Ác cảm'],[19,'Trung lập'],[49,'Thiện cảm'],[79,'Thân thiết'],[100,'Tri kỷ']];
+const clampAffinity=value=>Math.max(-100,Math.min(100,Math.round(Number(value)||0)));
+function affinityOf(name){return npcAffinity.get(name)||0}
+function affinityTier(value){return AFFINITY_TIERS.find(([limit])=>value<=limit)?.[1]||'Tri kỷ'}
+function setAffinity(name,value){npcAffinity.set(name,clampAffinity(value));return npcAffinity.get(name)}
+function adjustAffinity(name,delta){return setAffinity(name,affinityOf(name)+delta)}
+function resetNpcProfiles(){npcProfiles.clear();pendingNpcProfiles.clear();npcAffinity.clear()}
 function maxWorldLevel(){return worldRealms.length*10}
 function npcRealmLabel(level){return level<1?'Chưa tu luyện':getRealmForLevel(level)||'Chưa rõ'}
 // An NPC may be at most this many levels above the player.
@@ -85,8 +94,10 @@ function normalizeNpcProfile(raw,speaker){
 // Compact line per known NPC, fed back into story prompts so later turns stay consistent.
 function npcProfilesContext(limit=10){
   const known=[...npcProfiles.values()].slice(-limit);
-  if(!known.length)return 'HỒ SƠ NPC ĐÃ XÁC LẬP: chưa có.';
-  return `HỒ SƠ NPC ĐÃ XÁC LẬP (giữ đúng, không mâu thuẫn): ${known.map(p=>`${p.speaker} = ${p.fullName}, tự ${p.courtesyName}; ${p.identity}; ${p.realm}${p.level?` cấp ${p.level}`:''}; tính cách: ${p.personality}; ${Object.entries(CHARACTER_STAT_LABELS).map(([key,label])=>`${label} ${npcEffectiveStats(p)[key]}`).join(', ')}; ${p.beast&&!p.transformed?`chiêu thức bản năng: ${p.naturalAttacks.join(', ')}`:`trang bị: ${npcItemNames(p.equipment)}; kỹ năng: ${npcItemNames(p.skills)}`}`).join(' | ')}`;
+  if(!known.length&&![...npcAffinity.values()].some(Boolean))return 'HỒ SƠ NPC ĐÃ XÁC LẬP: chưa có.';
+  const unprofiled=[...npcAffinity].filter(([name,value])=>value&&!npcProfiles.has(name)).map(([name,value])=>`${name}: ${value} (${affinityTier(value)})`);
+  const extra=unprofiled.length?` HẢO CẢM KHÁC: ${unprofiled.join('; ')}.`:'';
+  return `HỒ SƠ NPC ĐÃ XÁC LẬP (giữ đúng, không mâu thuẫn): ${known.map(p=>`${p.speaker} = ${p.fullName}, tự ${p.courtesyName}; ${p.identity}; ${p.realm}${p.level?` cấp ${p.level}`:''}; tính cách: ${p.personality}; hảo cảm với người chơi: ${affinityOf(p.speaker)} (${affinityTier(affinityOf(p.speaker))}); ${Object.entries(CHARACTER_STAT_LABELS).map(([key,label])=>`${label} ${npcEffectiveStats(p)[key]}`).join(', ')}; ${p.beast&&!p.transformed?`chiêu thức bản năng: ${p.naturalAttacks.join(', ')}`:`trang bị: ${npcItemNames(p.equipment)}; kỹ năng: ${npcItemNames(p.skills)}`}`).join(' | ')}${extra}`;
 }
 
 (() => {
@@ -113,6 +124,7 @@ function npcProfilesContext(limit=10){
       field('Tính cách','personality',profile.personality,true)+
       `<div><dt>Cảnh giới</dt><dd id="npc-realm">${escapeHtml(profile.realm)}</dd></div>`+
       field('Cấp độ','level',profile.level,false,'',' type="number" min="0"')+
+      `<div><dt><label for="npc-affinity">Hảo cảm</label></dt><dd><div class="affinity"><div class="affinity-track"><i class="affinity-zero"></i><i class="affinity-fill"></i></div><div class="affinity-meta"><b id="npc-affinity-value"></b><span id="npc-affinity-tier"></span></div><input id="npc-affinity" type="range" min="-100" max="100" step="1" value="${affinityOf(profile.speaker)}" /></div></dd></div>`+
       `</dl></form>`+
       `<div class="npc-stats">${Object.entries(CHARACTER_STAT_LABELS).map(([key,label])=>`<div><span>${label}</span><b>${key==='health'&&profile.health!=null&&profile.health!==npcEffectiveStats(profile).health?`${profile.health.toLocaleString('vi-VN')} / `:''}${npcEffectiveStats(profile)[key].toLocaleString('vi-VN')}</b></div>`).join('')}</div>`+
       `<p class="npc-note">Chỉ số đã gồm trang bị và kỹ năng; đổi cấp độ sẽ quay lại toàn bộ.</p>`+
@@ -120,6 +132,14 @@ function npcProfilesContext(limit=10){
       ['Trang bị','Kỹ năng'].map((label,index)=>{const items=index?profile.skills:profile.equipment;return `<div class="npc-loadout"><h3>${label}</h3>${items?.length?items.map(item=>`<div class="item"><span class="item-icon">${escapeHtml(item[2])}</span><span class="item-details"><b>${escapeHtml(item[0])}</b><small>${escapeHtml(item[1])} · Cấp ${item[6]}</small><small>${escapeHtml(itemDescription(item))}</small></span></div>`).join(''):'<small class="npc-empty">Không có.</small>'}</div>`}).join('')+
       `<div class="npc-actions"><button type="button" class="create-item" id="npc-save">Lưu hồ sơ</button><span class="npc-notice" role="status">${escapeHtml(notice)}</span></div>`;
     const form=body.querySelector('#npc-profile-form');
+    const affinityInput=form.querySelector('#npc-affinity');
+    const paintAffinity=()=>{
+      const value=clampAffinity(affinityInput.value),fill=body.querySelector('.affinity-fill');
+      body.querySelector('#npc-affinity-value').textContent=value>0?`+${value}`:String(value);
+      body.querySelector('#npc-affinity-tier').textContent=affinityTier(value);
+      fill.style.left=`${value<0?50+value/2:50}%`;fill.style.width=`${Math.abs(value)/2}%`;fill.dataset.sign=value<0?'negative':'positive';
+    };
+    paintAffinity();affinityInput.addEventListener('input',paintAffinity);
     // Text areas grow with their content instead of showing a scrollbar.
     const fit=area=>{area.style.height='auto';area.style.height=`${area.scrollHeight+2}px`};
     form.querySelectorAll('textarea').forEach(area=>{fit(area);area.addEventListener('input',()=>fit(area))});
@@ -141,11 +161,13 @@ function npcProfilesContext(limit=10){
   function readForm(profile){
     const raw={...profile};
     body.querySelectorAll('[data-key]').forEach(input=>{raw[input.dataset.key]=input.value});
+    delete raw.affinity;
     if(!String(raw.courtesyName).trim())raw.courtesyName='Không có';
     return raw;
   }
   function saveProfile(profile){
     const updated=normalizeNpcProfile(readForm(profile),profile.speaker);
+    setAffinity(profile.speaker,body.querySelector('#npc-affinity').value);
     // Stats are only re-rolled when the level actually changed.
     if(profile.beast)Object.assign(updated,{beast:true,species:profile.species,transformed:profile.transformed,naturalAttacks:profile.naturalAttacks});
     if(updated.level===profile.level){updated.stats=profile.stats;updated.equipment=profile.equipment;updated.skills=profile.skills;if(profile.health!=null)updated.health=Math.min(profile.health,npcEffectiveStats(updated).health)}
