@@ -108,6 +108,7 @@ document.querySelector('#open-customize').onclick=()=>{
   document.querySelector('#custom-name').value=document.querySelector('#player-name').textContent;
   document.querySelector('#custom-level').value=playerLevel();showCustomRealm();
   customStatKeys.forEach(key=>{document.querySelector(`#custom-${key}`).value=baseStats[key]});
+  document.querySelector('#custom-coins').value=inventoryCoins;
   document.querySelector('#custom-status').textContent='';
   modal.classList.add('open');
 };
@@ -118,13 +119,14 @@ function selectOnFocus(input){
   // The mouseup that ends the focusing click would otherwise drop the selection.
   input.addEventListener('mousedown',event=>{if(document.activeElement!==input){event.preventDefault();input.focus()}});
 }
-['#custom-level',...customStatKeys.map(key=>`#custom-${key}`),'#origin-realm'].forEach(selector=>selectOnFocus(document.querySelector(selector)));document.querySelector('#close-modal').onclick=()=>modal.classList.remove('open');modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});
+['#custom-level',...customStatKeys.map(key=>`#custom-${key}`),'#custom-coins','#origin-realm'].forEach(selector=>selectOnFocus(document.querySelector(selector)));document.querySelector('#close-modal').onclick=()=>modal.classList.remove('open');modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});
 const settingsModal=document.querySelector('#settings-modal');document.querySelector('#open-settings').onclick=()=>settingsModal.classList.add('open');document.querySelector('#close-settings').onclick=()=>settingsModal.classList.remove('open');settingsModal.addEventListener('click',e=>{if(e.target===settingsModal)settingsModal.classList.remove('open')});
 document.querySelector('#save-custom').onclick=()=>{
   const name=document.querySelector('#custom-name').value.trim()||'Nhân vật vô danh',level=showCustomRealm();
   if(!realmLabelForLevel(level)){document.querySelector('#custom-status').textContent=`Cấp ${level} chưa có cảnh giới tương ứng. Thế giới này có ${worldRealms.length} cảnh giới, tối đa cấp ${worldRealms.length*10}.`;return}
   document.querySelector('#player-name').textContent=name;
   customStatKeys.forEach(key=>{const value=Math.floor(+document.querySelector(`#custom-${key}`).value);if(Number.isFinite(value))baseStats[key]=Math.max(key==='health'?1:0,value)});
+  const coins=Math.floor(+document.querySelector('#custom-coins').value);if(Number.isFinite(coins)){inventoryCoins=Math.max(0,coins);const shopCoins=document.querySelector('#shop-coins');if(shopCoins)shopCoins.textContent=inventoryCoins.toLocaleString('vi-VN')}
   // Tu vi is not editable: it restarts at 0 when the level changes and is kept otherwise.
   renderProgress(level,level===playerLevel()?currentXp():0);renderItems();
   modal.classList.remove('open');
