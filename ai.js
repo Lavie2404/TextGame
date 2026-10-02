@@ -606,30 +606,17 @@
     const anyPronoun = `(?:${pronoun.slice(3, -1)}|${pronoun.slice(3, -1).toLocaleLowerCase('vi')})`;
     const modifiers = '(?:\\s+(?:khẽ|nhẹ nhàng|trầm giọng|vội|lạnh lùng|lớn tiếng|chậm rãi|mỉm cười))*';
     const invalidNames = /^(?:Lời|Lời nói|Tiếng|Giọng|Người đối diện|Không rõ|Chưa rõ người nói|NPC|Người lạ|Cô gái|Chàng trai|Người đàn ông|Người phụ nữ)$/iu;
-    const generatedNames = new Map();
-    const usedNames = new Set([playerName, ...[...text.matchAll(/speaker\s*=\s*["']([^"']+)["']/gi)].map(match=>match[1])]);
     let lastNpc = '';
+    // An utterance nobody can be matched to is marked UNKNOWN_SPEAKER; nameUnknownSpeakers() then asks the
+    // model who said it. The code never invents a name itself.
     function requireSpeaker(speaker, hint = '') {
       if (speaker && !invalidNames.test(speaker)) {
         if(speaker!==playerName)lastNpc=speaker;
         return speaker;
       }
       if (/^(?:ngươi|bạn|nhân vật chính)$/iu.test(hint)) return playerName;
-      const key = /nàng|cô gái|phụ nữ/iu.test(hint) ? 'female' : /hắn|chàng|cậu|anh|đàn ông/iu.test(hint) ? 'male' : hint.toLocaleLowerCase('vi') || 'unidentified';
       if (!hint && lastNpc) return lastNpc;
-      if (!generatedNames.has(key)) {
-        const surnames = ['Lâm','Tống','Thẩm','Tô','Lục','Liễu','Hàn','Mộ'];
-        const given = key==='female' ? ['Thanh Dao','Nguyệt Ninh','Vân Chi','Nhược Lan'] : ['Vân Phong','Tử An','Cảnh Hành','Mặc Hiên'];
-        let index=generatedNames.size, candidate;
-        do {
-          candidate=`${surnames[index%surnames.length]} ${given[Math.floor(index/surnames.length)%given.length]}`;
-          if(index>=surnames.length*given.length)candidate+=' '+ 'An'.repeat(Math.floor(index/(surnames.length*given.length)));
-          index++;
-        } while(usedNames.has(candidate) || text.includes(candidate));
-        generatedNames.set(key,candidate);usedNames.add(candidate);
-      }
-      lastNpc=generatedNames.get(key);
-      return lastNpc;
+      return UNKNOWN_SPEAKER;
     }
     // Only an attribution directly beside an utterance can identify its speaker.
     function speechAttribution(before, after) {
@@ -779,6 +766,55 @@
     return emphasizeNames(capitalizeAfterDialogue(emphasizeQuotes(output + text.slice(cursor))), playerName);
   }
 
+  const UNKNOWN_SPEAKER = 'Chưa rõ người nói';
+  // Every <dialogue> still without a speaker is sent back to the model with the story around it; the
+  // model must say who spoke — an established character, the player, a historical figure who fits the
+  // place and time, or a newly named one — and the tag is rewritten with that name.
+  async function nameUnknownSpeakers(text, model, profile) {
+    const pattern = new RegExp(`<dialogue\\s+speaker\\s*=\\s*(["'])${UNKNOWN_SPEAKER}\\1\\s*>([\\s\\S]*?)<\\/dialogue\\s*>`, 'gi');
+    const unknown = [...text.matchAll(pattern)];
+    if (!unknown.length || !model) return text;
+    // The nearest gender cue in the sentences before a line is worked out here so the model cannot miss it.
+    const genderCue = before => {
+      const last = pattern => Math.max(-1, ...[...before.matchAll(pattern)].map(match => match.index));
+      const female = last(/thiếu nữ|cô nương|cô gái|nàng|phụ nữ|tiểu thư|phu nhân|lão bà|bà lão|nữ tử|mỹ nhân/giu), male = last(/người đàn ông|hắn|lão nhân|ông lão|lão giả|tướng quân|vị tướng|gã|thiếu niên|hán tử|nam tử|công tử|binh sĩ|lính/giu);
+      return female < 0 && male < 0 ? 'chưa rõ' : female > male ? 'NỮ' : 'NAM';
+    };
+    const items = unknown.map((match, index) => {
+      const before = text.slice(Math.max(0, match.index - 500), match.index).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      return `#${index + 1} — ngữ cảnh ngay trước: …${before}\n   GIỚI TÍNH NGƯỜI NÓI THEO NGỮ CẢNH: ${genderCue(before.slice(-220))}\n   LỜI NÓI: ${match[2].trim()}`;
+    }).join('\n\n');
+    try {
+      const response = await fetchWithTimeout(`${OLLAMA_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: `Ngươi xác định người nói cho các câu thoại trong game truyện. Chỉ trả về JSON đúng lược đồ. Với mỗi câu, name là họ tên đầy đủ bằng âm Hán Việt có dấu của chính nhân vật mà ngữ cảnh cho thấy đang nói: nhân vật đã có tên trong truyện thì dùng đúng tên đó; nhân vật người chơi thì ghi "${profile.name}"; nếu bối cảnh là lịch sử có thật và ngữ cảnh tả một người KHỚP với một nhân vật lịch sử thật (đúng giới tính, đúng vai trò, đúng nơi và thời điểm họ có mặt) thì dùng chính người đó; tuyệt đối không gán tên nhân vật lịch sử nam cho một thiếu nữ hay ngược lại; tên phải đúng GIỚI TÍNH NGƯỜI NÓI THEO NGỮ CẢNH đã ghi ở mỗi câu; còn lại tự nghĩ một tên mới hợp thời đại, thân phận và giới tính được tả, dùng nhất quán nếu nhiều câu cùng một người. Hai câu do hai người khác nhau nói (ngữ cảnh tả khác giới tính, trang phục, vị trí, vai) thì phải là hai tên khác nhau; thiếu nữ, cô nương phải mang tên nữ, tướng sĩ, lão nhân phải mang tên nam. name phải là một HỌ TÊN RIÊNG hoàn chỉnh (họ + tên, ví dụ dạng Trương Nhiên, Hàn Thanh Vũ), không phải quan hệ hay mô tả như "con gái của X", "X chi nữ", "thị nữ", "lão nông"; một nhân vật mới chưa chắc có họ hàng với người đã có tên, và doanh trại của một vị tướng không có nghĩa là ai ở đó cũng là vị tướng ấy. Không dùng chức danh chung, không dùng "Không rõ", không dùng tên trong ví dụ hướng dẫn.` },
+            { role: 'user', content: `THẾ GIỚI: ${profile.setting || profile.worldName}\n\n${npcProfilesContext()}\n\nCÁC CÂU THOẠI CHƯA RÕ NGƯỜI NÓI:\n\n${items}` }
+          ],
+          format: { type: 'object', properties: { names: { type: 'array', items: { type: 'object', properties: { index: { type: 'integer' }, name: { type: 'string' } }, required: ['index', 'name'] } } }, required: ['names'] },
+          think: false,
+          stream: false,
+          keep_alive: '10m',
+          options: { num_ctx: OLLAMA_NUM_CTX, temperature: 0.2, num_predict: 40 + unknown.length * 30 }
+        })
+      }, 120000);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
+      const names = new Map((JSON.parse(data.message?.content?.match(/\{[\s\S]*\}/)?.[0] || '{}').names || []).map(entry => [Number(entry.index), String(entry.name || '').replace(/\*\*/g, '').trim()]));
+      let index = 0;
+      return text.replace(pattern, (whole, quote, content) => {
+        const name = names.get(++index);
+        return name && !/^(?:không rõ|chưa rõ|npc|người lạ)/iu.test(name) ? `<dialogue speaker="${name.replace(/"/g, '')}">${content}</dialogue>` : whole;
+      });
+    } catch (error) {
+      console.warn('Không đặt được tên người nói:', error);
+      return text;
+    }
+  }
+
   window.renderNarrativeWithDialogue = (text, playerName) => {
     text.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean)
       .forEach(part => appendNarrationWithDialogue(part, playerName));
@@ -842,7 +878,7 @@
     return `NGÔI KỂ THỐNG NHẤT: Toàn bộ lời dẫn truyện dùng ngôi thứ hai, gọi nhân vật người chơi là "ngươi". Nhân vật người chơi là ${profile.name}. Khi kể hành động, cảm giác, vị trí hoặc sở hữu của nhân vật này, dùng "ngươi", "của ngươi", "trước mặt ngươi"; không gọi bằng tên riêng hoặc "hắn", "cậu ấy", "anh ấy", "cậu ta", "chàng" và không chuyển sang "tôi", "ta" hay "bạn" trong lời dẫn. Ví dụ: "Ngươi đứng bên cầu. Hơi thở của ngươi chậm lại. Người đàn ông nhìn thẳng vào ngươi." NPC vẫn được kể bằng tên hoặc đại từ phù hợp. Chỉ áp dụng quy tắc này cho lời dẫn: lời thoại giữ cách xưng hô tự nhiên của người nói, thuộc tính speaker vẫn dùng tên thật (${profile.name} cho người chơi). Không thay tên NPC hay lời thoại bằng "ngươi". Dù lịch sử truyện, bản tóm tắt hoặc hành động nhập vào dùng ngôi khác, phần truyện mới vẫn phải dùng ngôi thứ hai. Trước khi trả lời, rà lại ngôi kể trong mọi đoạn tường thuật.`;
   }
 
-  const namedDialogueRule = 'NPC chỉ được nói khi có tên riêng rõ ràng. Giới thiệu tên NPC trong lời kể trước câu thoại đầu tiên, dùng nhất quán tên đó trong speaker. Không dùng NPC, Chưa rõ người nói, Người lạ, Cô gái, Nàng hoặc chức danh chung làm tên. Với nhân vật hư cấu mới, đặt tên phù hợp thời kỳ và thế giới; với nhân vật đã có tên, giữ nguyên tên. Nếu NPC chưa có tên, tự sáng tạo ngay một tên cổ trang phù hợp như Lâm Vân Phong hoặc Tô Thanh Dao, giới thiệu tên và dùng nhất quán cho nhân vật đó. Không dừng truyện, không yêu cầu người chơi cung cấp tên. Không gán lời của NPC sang người chơi. Mọi tên xuất hiện trong các ví dụ của bản hướng dẫn này (Lâm Tuyết, Tống Thúy, Lâm Vân Phong, Tô Thanh Dao…) chỉ là minh họa cách viết, TUYỆT ĐỐI không dùng làm tên nhân vật trong truyện. Tên và giới tính của speaker phải khớp với nhân vật vừa được kể là đang nói: một người đàn ông mặc giáp vừa bước tới thì người nói phải là tên nam của chính người đó, không phải một cái tên nữ hay tên ở đâu khác.';
+  const namedDialogueRule = 'NPC chỉ được nói khi có tên riêng rõ ràng. Giới thiệu tên NPC trong lời kể trước câu thoại đầu tiên, dùng nhất quán tên đó trong speaker. Không dùng NPC, Chưa rõ người nói, Người lạ, Cô gái, Nàng hoặc chức danh chung làm tên. Với nhân vật hư cấu mới, đặt tên phù hợp thời kỳ và thế giới; với nhân vật đã có tên, giữ nguyên tên. Nếu NPC chưa có tên, ngươi phải tự nghĩ ra ngay một họ tên Hán Việt hợp thời đại, vùng đất, thân phận và giới tính của nhân vật, giới thiệu tên trong lời kể và dùng nhất quán cho nhân vật đó. Khi bối cảnh là một thời kỳ lịch sử có thật, hãy ưu tiên đưa vào các nhân vật lịch sử thật của thời kỳ đó (tướng lĩnh, mưu sĩ, quan lại, danh y, danh sĩ, kể cả nhân vật ít tên tuổi) với đúng vai trò, phe phái, nơi chốn và thời điểm họ thực sự có mặt; không bịa thêm chi tiết trái với sử. Không dừng truyện, không yêu cầu người chơi cung cấp tên. Không gán lời của NPC sang người chơi. Mọi tên xuất hiện trong các ví dụ của bản hướng dẫn này (Lâm Tuyết, Tống Thúy, Lâm Vân Phong, Tô Thanh Dao…) chỉ là minh họa cách viết, TUYỆT ĐỐI không dùng làm tên nhân vật trong truyện. Tên và giới tính của speaker phải khớp với nhân vật vừa được kể là đang nói: một người đàn ông mặc giáp vừa bước tới thì người nói phải là tên nam của chính người đó, không phải một cái tên nữ hay tên ở đâu khác.';
 
   function addressRule(profile) {
     return `XƯNG HÔ TRONG LỜI THOẠI NHẤT QUÁN: Mỗi người nói chọn đúng một cặp xưng hô hợp với quan hệ, tuổi tác và địa vị so với người nghe, rồi giữ nguyên cặp đó trong cả câu thoại và các lượt sau: ta–ngươi (ngang hàng hoặc bề trên nói với bề dưới), tại hạ–các hạ (lịch sự giữa người lạ), huynh–đệ, tỷ–muội, lão phu–tiểu tử, cháu–ông/bác, con–cha/mẹ, thiếp–chàng, thuộc hạ–chủ công. Hai vế của cặp phải khớp vai: đã xưng "cháu", "con", "thuộc hạ" thì gọi người nghe là "ông", "bác", "cha", "chủ công", không gọi là "ngươi"; đã gọi người nghe là "ngươi" thì xưng "ta", "lão phu", "bổn tọa", không xưng "cháu" hay "con". Mẫu sai: "Cháu ở đây đợi ngươi suốt cả ngày." Mẫu đúng: "Ta ở đây đợi ngươi suốt cả ngày." hoặc "Cháu ở đây đợi bác suốt cả ngày." Từ dùng để gọi người đối diện phải là cách gọi có thật trong tiếng Việt cổ trang, hợp tuổi và vai: gọi người trẻ hơn thì tiểu tử, tiểu huynh đệ, tiểu cô nương, công tử, cậu bé, nhóc con, cháu; gọi ngang hàng thì huynh đài, các hạ, đạo hữu, cô nương, huynh, đệ; gọi người trên thì tiền bối, lão nhân gia, đại nhân, tướng quân, sư phụ, trưởng lão. "Chàng" chỉ dành cho nữ gọi nam khi đã thân thiết hay có tình ý (đi với "thiếp"); nam gọi nam, người lạ gọi nhau hay nữ mới gặp nam đều không dùng "chàng", mà dùng công tử, huynh đài, các hạ, tiểu tử, ngươi tùy vai. Tương tự "nàng" trong lời thoại chỉ dành cho nam gọi nữ đã thân thiết; người lạ gọi cô nương, tiểu thư, phu nhân. Tuyệt đối không bịa ra cách gọi dịch máy móc như "chú trẻ", "người trẻ", "bạn trẻ", "anh bạn", "quý ông", "quý cô". Khi gọi tên người khác trong thoại, viết đúng từng chữ tên đã xác lập; tên nhân vật người chơi là ${profile.name}, không viết thành dạng khác. Trước khi trả lời, rà lại từng câu thoại xem xưng hô có đổi vai giữa chừng không.`;
@@ -1037,7 +1073,7 @@
       if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
       // The opening grants nothing; drop a loot line if the model adds one anyway.
       const openingText = await fixPinyinNames(extractLoot(data.message?.content?.trim() || '').text, model, profile);
-      const opening = removeRepeatedPassages(normalizeDialogue(openingText, profile.name));
+      const opening = removeRepeatedPassages(await nameUnknownSpeakers(normalizeDialogue(openingText, profile.name), model, profile));
       if (!opening) throw new Error('Model không trả về đoạn mở đầu.');
       setStatus('ready');
       help.textContent = `Đã tạo cảnh mở đầu bằng ${model}.`;
@@ -1335,7 +1371,7 @@
         ...[...story.querySelectorAll('.narration, .story-entry dialogue')].map(node => node.textContent.trim())
       ];
       const loot = extractLoot(raw);
-      const answer = removeRepeatedPassages(normalizeDialogue(await fixPinyinNames(loot.text, model, profile), profile.name), priorStory);
+      const answer = removeRepeatedPassages(await nameUnknownSpeakers(normalizeDialogue(await fixPinyinNames(loot.text, model, profile), profile.name), model, profile), priorStory);
       if (!answer) throw new Error('Model không trả về phần truyện.');
 
       answer.split(/\n\s*\n/).map(part => part.trim()).filter(Boolean)
