@@ -3,21 +3,34 @@ const NPC_PROFILE_SCHEMA = {
   type:'object',
   properties:{
     fullName:{type:'string'},courtesyName:{type:'string'},identity:{type:'string'},appearance:{type:'string'},personality:{type:'string'},
-    level:{type:'integer'}
+    level:{type:'integer'},gender:{type:'string',enum:['nam','nữ']}
   },
-  required:['fullName','courtesyName','identity','appearance','personality','level']
+  required:['fullName','courtesyName','identity','appearance','personality','level','gender']
 };
 const npcProfiles = new Map(), pendingNpcProfiles = new Map();
 // How each named character feels about the player: -100 (kẻ thù sinh tử) … 0 (trung lập) … 100 (tri kỷ).
 // Kept by name so it accrues from the first line someone speaks, before any profile exists.
 const npcAffinity = new Map();
-const AFFINITY_TIERS=[[-80,'Kẻ thù sinh tử'],[-50,'Thù địch'],[-20,'Ác cảm'],[19,'Trung lập'],[49,'Thiện cảm'],[79,'Thân thiết'],[100,'Tri kỷ']];
+const AFFINITY_TIERS=[[-80,'Kẻ thù sinh tử'],[-50,'Thù địch'],[-20,'Ác cảm'],[19,'Trung lập'],[49,'Thiện cảm'],[79,'Thân thiết'],[100,'Hảo hữu']];
+// The top tier is named by gender: a woman becomes tri kỷ, a man hảo hữu.
+const TOP_TIER={'nữ':'Tri kỷ','nam':'Hảo hữu'};
+// Gender read off narration: the nearest cue wins ("thiếu nữ", "nàng" → nữ; "hắn", "tướng quân" → nam).
+function genderFromText(text){
+  const last=pattern=>Math.max(-1,...[...String(text||'').matchAll(pattern)].map(match=>match.index));
+  const female=last(/(?<![\p{L}])(?:thiếu nữ|cô nương|cô gái|nàng|phụ nữ|tiểu thư|phu nhân|lão bà|bà lão|nữ tử|mỹ nhân|thị nữ|nữ|cô|chị|bà|mẹ|muội|tỷ)(?![\p{L}])/giu);
+  const male=last(/(?<![\p{L}])(?:người đàn ông|hắn|lão nhân|ông lão|lão giả|tướng quân|vị tướng|gã|thiếu niên|hán tử|nam tử|công tử|binh sĩ|lính|nam|ông|anh|cha|huynh|đệ|lão)(?![\p{L}])/giu);
+  return female<0&&male<0?'':female>male?'nữ':'nam';
+}
+// Gender by name: the profile if there is one, else what the story has shown about that name.
+const npcGenderHints=new Map();
+function npcGender(name){return npcProfiles.get(name)?.gender||npcGenderHints.get(name)||''}
+function noteGender(name,text){const gender=genderFromText(text);if(gender&&!npcGenderHints.has(name))npcGenderHints.set(name,gender)}
 const clampAffinity=value=>Math.max(-100,Math.min(100,Math.round(Number(value)||0)));
 function affinityOf(name){return npcAffinity.get(name)||0}
-function affinityTier(value){return AFFINITY_TIERS.find(([limit])=>value<=limit)?.[1]||'Tri kỷ'}
+function affinityTier(value,gender=''){const tier=AFFINITY_TIERS.find(([limit])=>value<=limit)?.[1]||'Hảo hữu';return tier==='Hảo hữu'?TOP_TIER[gender]||'Tri kỷ / Hảo hữu':tier}
 function setAffinity(name,value){npcAffinity.set(name,clampAffinity(value));return npcAffinity.get(name)}
 function adjustAffinity(name,delta){return setAffinity(name,affinityOf(name)+delta)}
-function resetNpcProfiles(){npcProfiles.clear();pendingNpcProfiles.clear();npcAffinity.clear()}
+function resetNpcProfiles(){npcProfiles.clear();pendingNpcProfiles.clear();npcAffinity.clear();npcGenderHints.clear()}
 function maxWorldLevel(){return worldRealms.length*10}
 function npcRealmLabel(level){return level<1?'Chưa tu luyện':getRealmForLevel(level)||'Chưa rõ'}
 // An NPC may be at most this many levels above the player.
@@ -85,7 +98,8 @@ function normalizeNpcProfile(raw,speaker){
   const text=(value,fallback,limit=240)=>String(value??'').replace(/\s+/g,' ').trim().slice(0,limit)||fallback;
   const level=Math.min(Math.max(0,Math.round(Number(raw.level))||0),npcLevelCap());
   const stats=rollCharacterStats(level);
-  return {
+  const gender=/nữ|female/iu.test(String(raw.gender||''))?'nữ':/nam|male/iu.test(String(raw.gender||''))?'nam':genderFromText(`${raw.identity||''} ${raw.appearance||''}`)||npcGenderHints.get(speaker)||'nam';
+  return {gender,
     speaker,fullName:text(raw.fullName,speaker,60),courtesyName:text(raw.courtesyName,'Không có',40),
     identity:text(raw.identity,'Chưa rõ'),appearance:text(raw.appearance,'Chưa rõ',400),personality:text(raw.personality,'Chưa rõ',400),
     level,realm:npcRealmLabel(level),stats,...rollNpcLoadout(level)
@@ -95,9 +109,9 @@ function normalizeNpcProfile(raw,speaker){
 function npcProfilesContext(limit=10){
   const known=[...npcProfiles.values()].slice(-limit);
   if(!known.length&&![...npcAffinity.values()].some(Boolean))return 'HỒ SƠ NPC ĐÃ XÁC LẬP: chưa có.';
-  const unprofiled=[...npcAffinity].filter(([name,value])=>value&&!npcProfiles.has(name)).map(([name,value])=>`${name}: ${value} (${affinityTier(value)})`);
+  const unprofiled=[...npcAffinity].filter(([name,value])=>value&&!npcProfiles.has(name)).map(([name,value])=>`${name}: ${value} (${affinityTier(value,npcGender(name))})`);
   const extra=unprofiled.length?` HẢO CẢM KHÁC: ${unprofiled.join('; ')}.`:'';
-  return `HỒ SƠ NPC ĐÃ XÁC LẬP (giữ đúng, không mâu thuẫn): ${known.map(p=>`${p.speaker} = ${p.fullName}, tự ${p.courtesyName}; ${p.identity}; ${p.realm}${p.level?` cấp ${p.level}`:''}; tính cách: ${p.personality}; hảo cảm với người chơi: ${affinityOf(p.speaker)} (${affinityTier(affinityOf(p.speaker))}); ${Object.entries(CHARACTER_STAT_LABELS).map(([key,label])=>`${label} ${npcEffectiveStats(p)[key]}`).join(', ')}; ${p.beast&&!p.transformed?`chiêu thức bản năng: ${p.naturalAttacks.join(', ')}`:`trang bị: ${npcItemNames(p.equipment)}; kỹ năng: ${npcItemNames(p.skills)}`}`).join(' | ')}${extra}`;
+  return `HỒ SƠ NPC ĐÃ XÁC LẬP (giữ đúng, không mâu thuẫn): ${known.map(p=>`${p.speaker} = ${p.fullName}, tự ${p.courtesyName}; ${p.identity}; ${p.realm}${p.level?` cấp ${p.level}`:''}; tính cách: ${p.personality}; giới tính ${p.gender||'chưa rõ'}; hảo cảm với người chơi: ${affinityOf(p.speaker)} (${affinityTier(affinityOf(p.speaker),p.gender)}); ${Object.entries(CHARACTER_STAT_LABELS).map(([key,label])=>`${label} ${npcEffectiveStats(p)[key]}`).join(', ')}; ${p.beast&&!p.transformed?`chiêu thức bản năng: ${p.naturalAttacks.join(', ')}`:`trang bị: ${npcItemNames(p.equipment)}; kỹ năng: ${npcItemNames(p.skills)}`}`).join(' | ')}${extra}`;
 }
 
 (() => {
@@ -119,6 +133,7 @@ function npcProfilesContext(limit=10){
     body.innerHTML=`<form id="npc-profile-form"><dl class="npc-profile">`+
       field('Họ và tên','fullName',profile.fullName)+
       field('Tự','courtesyName',needsCourtesy?'':profile.courtesyName,false,`<button type="button" class="create-item npc-inline" id="npc-courtesy-ai"${needsCourtesy?'':' hidden'}>AI đặt tên tự</button>`)+
+      `<div><dt><label for="npc-gender">Giới tính</label></dt><dd><select id="npc-gender" data-key="gender"><option value="nam"${profile.gender==='nam'?' selected':''}>Nam</option><option value="nữ"${profile.gender==='nữ'?' selected':''}>Nữ</option></select></dd></div>`+
       field('Thân phận','identity',profile.identity,true)+
       field('Ngoại hình','appearance',profile.appearance,true)+
       field('Tính cách','personality',profile.personality,true)+
@@ -136,10 +151,10 @@ function npcProfilesContext(limit=10){
     const paintAffinity=()=>{
       const value=clampAffinity(affinityInput.value),fill=body.querySelector('.affinity-fill');
       body.querySelector('#npc-affinity-value').textContent=value>0?`+${value}`:String(value);
-      body.querySelector('#npc-affinity-tier').textContent=affinityTier(value);
+      body.querySelector('#npc-affinity-tier').textContent=affinityTier(value,form.querySelector('#npc-gender').value);
       fill.style.left=`${value<0?50+value/2:50}%`;fill.style.width=`${Math.abs(value)/2}%`;fill.dataset.sign=value<0?'negative':'positive';
     };
-    paintAffinity();affinityInput.addEventListener('input',paintAffinity);
+    paintAffinity();affinityInput.addEventListener('input',paintAffinity);form.querySelector('#npc-gender').addEventListener('change',paintAffinity);
     // Text areas grow with their content instead of showing a scrollbar.
     const fit=area=>{area.style.height='auto';area.style.height=`${area.scrollHeight+2}px`};
     form.querySelectorAll('textarea').forEach(area=>{fit(area);area.addEventListener('input',()=>fit(area))});

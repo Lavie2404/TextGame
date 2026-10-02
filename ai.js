@@ -123,7 +123,7 @@
               `TIẾN ĐỘ ĐANG GHI: ${journal.progress}%`,
               `KÝ ỨC GẦN ĐÂY: ${journal.notes.map(note => note.text).join(' | ') || 'chưa có'}`,
               `HÀNH ĐỘNG NGƯỜI CHƠI LƯỢT NÀY:\n${action}`,
-              `HẢO CẢM HIỆN TẠI: ${[...new Set([...narrative.matchAll(/speaker\s*=\s*["']([^"']+)["']/g)].map(match => match[1]))].filter(name => name !== getProfile().name).map(name => `${name}: ${affinityOf(name)} (${affinityTier(affinityOf(name))})`).join('; ') || 'chưa có nhân vật nào'}`,
+              `HẢO CẢM HIỆN TẠI: ${[...new Set([...narrative.matchAll(/speaker\s*=\s*["']([^"']+)["']/g)].map(match => match[1]))].filter(name => name !== getProfile().name).map(name => `${name}: ${affinityOf(name)} (${affinityTier(affinityOf(name), npcGender(name))})`).join('; ') || 'chưa có nhân vật nào'}`,
               `DIỄN BIẾN VỪA KỂ:\n${narrative.length > 6000 ? `${narrative.slice(0, 3000)}\n[...]\n${narrative.slice(-3000)}` : narrative}`
             ].join('\n\n') }
           ],
@@ -150,12 +150,16 @@
     if (typeof update?.step === 'string' && update.step.trim()) journal.step = update.step.replace(/\s+/g, ' ').trim();
     if (Number.isFinite(update?.progress)) journal.progress = Math.max(0, Math.min(100, Math.round(update.progress)));
     // Affinity moves at most 20 a turn and only for characters who were actually in the scene.
-    const present = new Set([...narrative.matchAll(/speaker\s*=\s*["']([^"']+)["']/g)].map(match => match[1]));
+    const present = new Set();
+    for (const match of narrative.matchAll(/speaker\s*=\s*["']([^"']+)["']/g)) {
+      present.add(match[1]);
+      noteGender(match[1], narrative.slice(Math.max(0, match.index - 220), match.index).replace(/<[^>]*>/g, ' '));
+    }
     const changes = (Array.isArray(update?.affinity) ? update.affinity : [])
       .map(entry => ({ name: String(entry.name || '').replace(/\*\*/g, '').trim(), delta: Math.max(-20, Math.min(20, Math.round(Number(entry.delta) || 0))) }))
       .filter(entry => entry.delta && entry.name && entry.name !== getProfile().name && (present.has(entry.name) || npcProfiles.has(entry.name) || narrative.includes(entry.name)));
     changes.forEach(entry => adjustAffinity(entry.name, entry.delta));
-    if (changes.length) appendTurnReport(`Hảo cảm: ${changes.map(entry => `${entry.name} ${entry.delta > 0 ? '+' : ''}${entry.delta} → ${affinityOf(entry.name)} (${affinityTier(affinityOf(entry.name))})`).join('; ')}.`);
+    if (changes.length) appendTurnReport(`Hảo cảm: ${changes.map(entry => `${entry.name} ${entry.delta > 0 ? '+' : ''}${entry.delta} → ${affinityOf(entry.name)} (${affinityTier(affinityOf(entry.name), npcGender(entry.name))})`).join('; ')}.`);
     saveChapterState();
     renderJourney();
   }
@@ -783,11 +787,7 @@
     const unknown = [...text.matchAll(pattern)];
     if (!unknown.length || !model) return text;
     // The nearest gender cue in the sentences before a line is worked out here so the model cannot miss it.
-    const genderCue = before => {
-      const last = pattern => Math.max(-1, ...[...before.matchAll(pattern)].map(match => match.index));
-      const female = last(/thiếu nữ|cô nương|cô gái|nàng|phụ nữ|tiểu thư|phu nhân|lão bà|bà lão|nữ tử|mỹ nhân/giu), male = last(/người đàn ông|hắn|lão nhân|ông lão|lão giả|tướng quân|vị tướng|gã|thiếu niên|hán tử|nam tử|công tử|binh sĩ|lính/giu);
-      return female < 0 && male < 0 ? 'chưa rõ' : female > male ? 'NỮ' : 'NAM';
-    };
+    const genderCue = before => ({ 'nữ': 'NỮ', 'nam': 'NAM' })[genderFromText(before)] || 'chưa rõ';
     const items = unknown.map((match, index) => {
       const before = text.slice(Math.max(0, match.index - 500), match.index).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
       return `#${index + 1} — ngữ cảnh ngay trước: …${before}\n   GIỚI TÍNH NGƯỜI NÓI THEO NGỮ CẢNH: ${genderCue(before.slice(-220))}\n   LỜI NÓI: ${match[2].trim()}`;
@@ -813,9 +813,11 @@
       if (!response.ok) throw new Error(data.error || `Ollama trả về HTTP ${response.status}.`);
       const names = new Map((JSON.parse(data.message?.content?.match(/\{[\s\S]*\}/)?.[0] || '{}').names || []).map(entry => [Number(entry.index), String(entry.name || '').replace(/\*\*/g, '').trim()]));
       let index = 0;
-      return text.replace(pattern, (whole, quote, content) => {
+      return text.replace(pattern, (whole, quote, content, offset) => {
         const name = names.get(++index);
-        return name && !/^(?:không rõ|chưa rõ|npc|người lạ)/iu.test(name) ? `<dialogue speaker="${name.replace(/"/g, '')}">${content}</dialogue>` : whole;
+        if (!name || /^(?:không rõ|chưa rõ|npc|người lạ)/iu.test(name)) return whole;
+        noteGender(name, text.slice(Math.max(0, offset - 220), offset).replace(/<[^>]*>/g, ' '));
+        return `<dialogue speaker="${name.replace(/"/g, '')}">${content}</dialogue>`;
       });
     } catch (error) {
       console.warn('Không đặt được tên người nói:', error);
@@ -892,7 +894,7 @@
     return `XƯNG HÔ TRONG LỜI THOẠI NHẤT QUÁN: Mỗi người nói chọn đúng một cặp xưng hô hợp với quan hệ, tuổi tác và địa vị so với người nghe, rồi giữ nguyên cặp đó trong cả câu thoại và các lượt sau: ta–ngươi (ngang hàng hoặc bề trên nói với bề dưới), tại hạ–các hạ (lịch sự giữa người lạ), huynh–đệ, tỷ–muội, lão phu–tiểu tử, cháu–ông/bác, con–cha/mẹ, thiếp–chàng, thuộc hạ–chủ công. Hai vế của cặp phải khớp vai: đã xưng "cháu", "con", "thuộc hạ" thì gọi người nghe là "ông", "bác", "cha", "chủ công", không gọi là "ngươi"; đã gọi người nghe là "ngươi" thì xưng "ta", "lão phu", "bổn tọa", không xưng "cháu" hay "con". Mẫu sai: "Cháu ở đây đợi ngươi suốt cả ngày." Mẫu đúng: "Ta ở đây đợi ngươi suốt cả ngày." hoặc "Cháu ở đây đợi bác suốt cả ngày." Từ dùng để gọi người đối diện phải là cách gọi có thật trong tiếng Việt cổ trang, hợp tuổi và vai: gọi người trẻ hơn thì tiểu tử, tiểu huynh đệ, tiểu cô nương, công tử, cậu bé, nhóc con, cháu; gọi ngang hàng thì huynh đài, các hạ, đạo hữu, cô nương, huynh, đệ; gọi người trên thì tiền bối, lão nhân gia, đại nhân, tướng quân, sư phụ, trưởng lão. "Chàng" chỉ dành cho nữ gọi nam khi đã thân thiết hay có tình ý (đi với "thiếp"); nam gọi nam, người lạ gọi nhau hay nữ mới gặp nam đều không dùng "chàng", mà dùng công tử, huynh đài, các hạ, tiểu tử, ngươi tùy vai. Tương tự "nàng" trong lời thoại chỉ dành cho nam gọi nữ đã thân thiết; người lạ gọi cô nương, tiểu thư, phu nhân. Tuyệt đối không bịa ra cách gọi dịch máy móc như "chú trẻ", "người trẻ", "bạn trẻ", "anh bạn", "quý ông", "quý cô". Khi gọi tên người khác trong thoại, viết đúng từng chữ tên đã xác lập; tên nhân vật người chơi là ${profile.name}, không viết thành dạng khác. Trước khi trả lời, rà lại từng câu thoại xem xưng hô có đổi vai giữa chừng không.`;
   }
 
-  const affinityRule = 'HẢO CẢM QUYẾT ĐỊNH THÁI ĐỘ NPC: Mỗi NPC có điểm hảo cảm với người chơi từ -100 đến 100 ghi trong hồ sơ; thái độ, lời lẽ và hành động của họ phải đúng mức đó. Kẻ thù sinh tử (-100..-80): tìm cách hại, giết, không nghe lý lẽ. Thù địch (-79..-50): khinh ghét, cản trở, có thể ra tay. Ác cảm (-49..-20): lạnh nhạt, nghi ngờ, từ chối giúp. Trung lập (-19..19): xã giao, cẩn trọng, giúp khi có lợi. Thiện cảm (20..49): cởi mở, sẵn lòng giúp việc nhỏ. Thân thiết (50..79): tin cậy, chia sẻ bí mật, giúp việc lớn, có thể nảy sinh tình cảm. Tri kỷ (80..100): sống chết có nhau, hy sinh vì người chơi. Hảo cảm chỉ thay đổi từ từ qua hành động thật trong truyện, không nhảy vọt vì một câu nói; không bao giờ ghi con số hảo cảm vào truyện.';
+  const affinityRule = 'HẢO CẢM QUYẾT ĐỊNH THÁI ĐỘ NPC: Mỗi NPC có điểm hảo cảm với người chơi từ -100 đến 100 ghi trong hồ sơ; thái độ, lời lẽ và hành động của họ phải đúng mức đó. Kẻ thù sinh tử (-100..-80): tìm cách hại, giết, không nghe lý lẽ. Thù địch (-79..-50): khinh ghét, cản trở, có thể ra tay. Ác cảm (-49..-20): lạnh nhạt, nghi ngờ, từ chối giúp. Trung lập (-19..19): xã giao, cẩn trọng, giúp khi có lợi. Thiện cảm (20..49): cởi mở, sẵn lòng giúp việc nhỏ. Thân thiết (50..79): tin cậy, chia sẻ bí mật, giúp việc lớn, có thể nảy sinh tình cảm. Bậc cao nhất (80..100) gọi theo giới tính: nữ là Tri kỷ (sống chết có nhau, có thể thành người thương), nam là Hảo hữu (huynh đệ sinh tử, hy sinh vì nhau); nam với nam không bao giờ là tri kỷ hay tình nhân, trừ khi người chơi tự nhập như vậy. Hảo cảm chỉ thay đổi từ từ qua hành động thật trong truyện, không nhảy vọt vì một câu nói; không bao giờ ghi con số hảo cảm vào truyện.';
 
   const combatRule = 'GIAO CHIẾN PHẢI KỂ RÕ TỪNG ĐƯỜNG: Khi có đánh nhau, không được tóm tắt kiểu "trận chiến bắt đầu" hay "hai người giao đấu một hồi". Kể theo từng hiệp, mỗi hiệp gồm đủ bốn ý: (1) ai ra tay, bằng chiêu gì (gọi tên chiêu thức hoặc tả rõ động tác, vũ khí, hướng đánh; nhân vật chính chỉ dùng kỹ năng và trang bị đang có, người thường chưa tu luyện thì chỉ có quyền cước, binh khí thường); (2) chiêu đó nhắm vào đâu và uy lực ra sao; (3) đối thủ ứng phó thế nào: né tránh, đỡ đòn, phản công hay chịu đòn, và vì sao; (4) kết quả thật: trúng hay hụt, bị thương ở đâu, nặng nhẹ, mất thế hay giữ thế. Khi lượt này có KỊCH BẢN GIAO CHIẾN do hệ thống tính sẵn thì số đòn, thứ tự ra đòn, mức thương tích và kết cục phải theo đúng kịch bản, không thêm bớt; không có kịch bản (đánh thú hoang, lính vô danh) thì ít nhất 3 hiệp và chênh lệch cấp độ, chỉ số phải thể hiện trong kết quả từng hiệp. Không bao giờ ghi con số chỉ số, máu hay phần trăm vào truyện. Kết thúc đoạn giao chiến phải nêu rõ trạng thái hai bên: còn đứng được không, thương tích, ai thắng thế, trận đánh đã kết thúc hay còn tiếp diễn. Nếu người chơi chỉ mới khơi mào hoặc nhận lời đánh, hãy kể hiệp đầu tiên ngay trong lượt này thay vì dừng ở lời hẹn.';
 
@@ -1119,7 +1121,7 @@
             `THẾ GIỚI: ${profile.setting || profile.worldName}`,
             `NHÂN VẬT CẦN LẬP HỒ SƠ: "${speaker}" (tên hiển thị trong truyện).`,
             'fullName: họ và tên đầy đủ bằng âm Hán Việt có dấu (Vương Hạo, không viết Wáng Hào hay Wang Hao). Nếu truyện chỉ gọi bằng chức danh hoặc biệt danh, đặt họ tên hợp thời đại và giữ phần đã biết (ví dụ "Trưởng lão Từ" thì họ Từ). Nếu tên hiển thị trong truyện đang ở dạng bính âm, hãy chuyển sang Hán Việt.',
-            'courtesyName: tên tự, nếu thời đại/thân phận có dùng tên tự; nếu không thì ghi "Không có".',
+            'courtesyName: tên tự, nếu thời đại/thân phận có dùng tên tự; nếu không thì ghi "Không có". gender: "nam" hoặc "nữ" theo đúng cách truyện tả nhân vật.',
             'identity: thân phận, chức vụ, phe phái. appearance: ngoại hình, 1–2 câu. personality: tính cách, 1–2 câu.',
             `level: 0 nếu là người thường chưa tu luyện; ngược lại từ 1 đến ${npcLevelCap()} (không được cao hơn nhân vật chính quá ${NPC_LEVEL_LEAD} cấp), tương xứng với thân phận và sức mạnh truyện đã thể hiện. Hệ thống cảnh giới: ${realms}. Nhân vật chính ${profile.name} đang ở ${profile.realm}. Chỉ số do hệ thống tự tính theo cấp độ, không cần ghi.`,
             npcProfilesContext(),
