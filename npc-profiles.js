@@ -120,6 +120,9 @@ function npcProfilesContext(limit=10){
       ['Trang bị','Kỹ năng'].map((label,index)=>{const items=index?profile.skills:profile.equipment;return `<div class="npc-loadout"><h3>${label}</h3>${items?.length?items.map(item=>`<div class="item"><span class="item-icon">${escapeHtml(item[2])}</span><span class="item-details"><b>${escapeHtml(item[0])}</b><small>${escapeHtml(item[1])} · Cấp ${item[6]}</small><small>${escapeHtml(itemDescription(item))}</small></span></div>`).join(''):'<small class="npc-empty">Không có.</small>'}</div>`}).join('')+
       `<div class="npc-actions"><button type="button" class="create-item" id="npc-save">Lưu hồ sơ</button><span class="npc-notice" role="status">${escapeHtml(notice)}</span></div>`;
     const form=body.querySelector('#npc-profile-form');
+    // Text areas grow with their content instead of showing a scrollbar.
+    const fit=area=>{area.style.height='auto';area.style.height=`${area.scrollHeight+2}px`};
+    form.querySelectorAll('textarea').forEach(area=>{fit(area);area.addEventListener('input',()=>fit(area))});
     const courtesyInput=form.querySelector('#npc-courtesyName'),courtesyButton=body.querySelector('#npc-courtesy-ai');
     courtesyInput.addEventListener('input',()=>{courtesyButton.hidden=courtesyInput.value.trim()!==''});
     form.querySelector('#npc-level').addEventListener('input',event=>{body.querySelector('#npc-realm').textContent=npcRealmLabel(Number(event.target.value)||0)});
